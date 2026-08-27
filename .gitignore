@@ -1,0 +1,14 @@
+# OS / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/
+
+# Dependencies (none required, but keep clones clean)
+node_modules/
+
+# Scratch / build output
+*.log
+tmp/
+dist/

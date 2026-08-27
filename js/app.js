@@ -1,0 +1,404 @@
+/*
+ * app.js — central state + high-level actions.
+ *
+ * UI modules read MPC.app.state and call MPC.app.* actions; actions mutate
+ * state, drive the engine/transport, persist to IndexedDB, and emit bus events
+ * that the UI re-renders from.
+ */
+(function () {
+  'use strict';
+  const MPC = window.MPC;
+  const { models, engine, storage, sequencer, transport } = MPC;
+
+  const App = {
+    sampleCache: new Map(),   // sampleId -> resolved Sample object
+
+    state: {
+      projectId: null,
+      projectName: 'Untitled Project',
+      bankId: null,
+      bankName: 'Untitled Bank',
+
+      bpm: MPC.const.DEFAULT_BPM,
+      beatsPerBar: MPC.const.DEFAULT_BEATS_PER_BAR,
+      barsPerSection: MPC.const.DEFAULT_BARS_PER_SECTION,
+      quantize: '1/16',
+      metronomeOn: true,
+      countIn: true,
+      masterVolume: 0.9,
+
+      selectedPad: 0,
+      pads: [],
+      sections: [],
+      selectedSectionId: null,
+      dirty: false,
+    },
+
+    init() {
+      const s = this.state;
+      s.pads = [];
+      for (let i = 0; i < MPC.const.NUM_PADS; i++) s.pads.push(models.defaultPad(i));
+      this.applyTransportSettings();
+    },
+
+    markDirty() { this.state.dirty = true; },
+
+    ensureAudio() {
+      return engine.ensure().then((ctx) => {
+        engine.master.setVolume(this.state.masterVolume);
+        return ctx;
+      });
+    },
+
+    // ---- pads -------------------------------------------------------------
+    getPad(i) { return this.state.pads[i]; },
+    selectPad(i) {
+      this.state.selectedPad = i;
+      MPC.bus.emit('pad:selected', { padIndex: i });
+    },
+
+    async loadSampleToPad(padIndex, file) {
+      try {
+        const sample = await MPC.Sample.fromFile(file);
+        this.sampleCache.set(sample.id, sample);
+        await storage.saveSample(MPC.Sample.toRecord(sample));
+        const pad = this.state.pads[padIndex];
+        pad.sampleId = sample.id;
+        pad.sample = sample;
+        pad.trimStart = 0;
+        pad.trimEnd = sample.duration;
+        if (pad.name === 'Pad ' + (padIndex + 1)) pad.name = sample.name.replace(/\.[^.]+$/, '').slice(0, 18);
+        engine.syncPadChannel(padIndex, pad);
+        this.markDirty();
+        MPC.bus.emit('pad:changed', { padIndex });
+        MPC.toast('Loaded “' + sample.name + '” to pad ' + (padIndex + 1));
+      } catch (err) {
+        console.error(err);
+        MPC.toast('Could not load audio: ' + err.message, 'error');
+      }
+    },
+
+    clearPad(padIndex) {
+      const pad = this.state.pads[padIndex];
+      const fresh = models.defaultPad(padIndex);
+      Object.assign(pad, fresh, { name: 'Pad ' + (padIndex + 1) });
+      pad.sample = null;
+      engine.syncPadChannel(padIndex, pad);
+      this.markDirty();
+      MPC.bus.emit('pad:changed', { padIndex });
+    },
+
+    updatePad(padIndex, changes) {
+      const pad = this.state.pads[padIndex];
+      Object.assign(pad, changes);
+      engine.syncPadChannel(padIndex, pad);
+      this.markDirty();
+      MPC.bus.emit('pad:changed', { padIndex });
+    },
+
+    updatePadEq(padIndex, band, changes) {
+      const pad = this.state.pads[padIndex];
+      Object.assign(pad.eq[band], changes);
+      engine.syncPadChannel(padIndex, pad);
+      this.markDirty();
+      MPC.bus.emit('pad:changed', { padIndex });
+    },
+
+    syncAllPadChannels() {
+      this.state.pads.forEach((p, i) => engine.syncPadChannel(i, p));
+    },
+
+    // ---- transport / global settings -------------------------------------
+    applyTransportSettings() {
+      const s = this.state;
+      transport.bpm = s.bpm;
+      transport.beatsPerBar = s.beatsPerBar;
+      transport.metronomeEnabled = s.metronomeOn;
+      transport.countInBeats = s.beatsPerBar; // one-bar count-in
+    },
+
+    setTempo(bpm) {
+      this.state.bpm = MPC.util.clamp(Math.round(bpm), 20, 300);
+      transport.setTempo(this.state.bpm);
+      this.markDirty();
+      MPC.bus.emit('settings:changed');
+    },
+    setBeatsPerBar(n) {
+      this.state.beatsPerBar = MPC.util.clamp(n, 1, 12);
+      this.applyTransportSettings();
+      this.markDirty();
+      MPC.bus.emit('settings:changed');
+    },
+    setBarsPerSection(n) {
+      this.state.barsPerSection = MPC.util.clamp(n, 1, 16);
+      this.markDirty();
+      MPC.bus.emit('settings:changed');
+    },
+    setQuantize(q) { this.state.quantize = q; this.markDirty(); MPC.bus.emit('settings:changed'); },
+    toggleMetronome(on) {
+      this.state.metronomeOn = on != null ? on : !this.state.metronomeOn;
+      transport.metronomeEnabled = this.state.metronomeOn;
+      MPC.bus.emit('settings:changed');
+    },
+    toggleCountIn(on) {
+      this.state.countIn = on != null ? on : !this.state.countIn;
+      MPC.bus.emit('settings:changed');
+    },
+    setMasterVolume(v) {
+      this.state.masterVolume = MPC.util.clamp(v, 0, 1.5);
+      if (engine.master) engine.master.setVolume(this.state.masterVolume);
+      this.markDirty();
+      MPC.bus.emit('settings:changed');
+    },
+
+    // ---- sections / playlist ---------------------------------------------
+    getSelectedSection() {
+      return this.state.sections.find((s) => s.id === this.state.selectedSectionId) || null;
+    },
+    selectSection(id) {
+      this.state.selectedSectionId = id;
+      MPC.bus.emit('section:selected', { sectionId: id });
+    },
+
+    toggleRecord() {
+      if (sequencer.recording) { sequencer.stopRecording(); return; }
+      this.ensureAudio().then(() => {
+        const s = this.state;
+        const section = models.makeSection('Section ' + (s.sections.length + 1), s.barsPerSection);
+        section.color = MPC.const.PAD_COLORS[(s.sections.length * 3) % MPC.const.PAD_COLORS.length];
+        s.sections.push(section);
+        s.selectedSectionId = section.id;
+        this.markDirty();
+        MPC.bus.emit('sections:changed');
+        sequencer.startRecording(section);
+      });
+    },
+
+    overdubSection(id) {
+      const section = this.state.sections.find((s) => s.id === id);
+      if (!section) return;
+      if (sequencer.recording) { sequencer.stopRecording(); return; }
+      this.state.selectedSectionId = id;
+      this.ensureAudio().then(() => sequencer.startRecording(section));
+    },
+
+    stopEverything() {
+      if (sequencer.recording) sequencer.stopRecording();
+      else if (transport.running && transport.mode === 'arrangement') sequencer.stopArrangement();
+      else sequencer.stopPreview();
+      transport.stop();
+    },
+
+    previewSection(id) {
+      const section = this.state.sections.find((s) => s.id === id);
+      if (!section) return;
+      this.state.selectedSectionId = id;
+      this.ensureAudio().then(() => sequencer.previewSection(section));
+    },
+
+    playArrangement(loop) {
+      this.ensureAudio().then(() => sequencer.playArrangement({ loop: !!loop }));
+    },
+
+    updateSection(id, changes) {
+      const section = this.state.sections.find((s) => s.id === id);
+      if (!section) return;
+      Object.assign(section, changes);
+      // If this section is on the live bus right now, reflect volume/EQ.
+      if (sequencer.activePlaybackSection() && sequencer.activePlaybackSection().id === id) {
+        engine.sectionBus.setEq(section.eq);
+        engine.sectionBus.setVolume(MPC.util.dbToGain(section.volumeDb || 0));
+      }
+      this.markDirty();
+      MPC.bus.emit('section:updated', { sectionId: id });
+    },
+    updateSectionEq(id, band, changes) {
+      const section = this.state.sections.find((s) => s.id === id);
+      if (!section) return;
+      Object.assign(section.eq[band], changes);
+      if (sequencer.activePlaybackSection() && sequencer.activePlaybackSection().id === id) {
+        engine.sectionBus.setEq(section.eq);
+      }
+      this.markDirty();
+      MPC.bus.emit('section:updated', { sectionId: id });
+    },
+
+    deleteSection(id) {
+      const s = this.state;
+      s.sections = s.sections.filter((x) => x.id !== id);
+      if (s.selectedSectionId === id) s.selectedSectionId = s.sections.length ? s.sections[0].id : null;
+      this.markDirty();
+      MPC.bus.emit('sections:changed');
+    },
+    duplicateSection(id) {
+      const s = this.state;
+      const idx = s.sections.findIndex((x) => x.id === id);
+      if (idx < 0) return;
+      const copy = MPC.util.clone(s.sections[idx]);
+      copy.id = MPC.util.uid('sec');
+      copy.name = s.sections[idx].name + ' copy';
+      copy.events = s.sections[idx].events.map((e) => ({ padIndex: e.padIndex, time: e.time, rawTime: e.rawTime, velocity: e.velocity }));
+      s.sections.splice(idx + 1, 0, copy);
+      s.selectedSectionId = copy.id;
+      this.markDirty();
+      MPC.bus.emit('sections:changed');
+    },
+    moveSection(id, dir) {
+      const s = this.state;
+      const idx = s.sections.findIndex((x) => x.id === id);
+      const to = idx + dir;
+      if (idx < 0 || to < 0 || to >= s.sections.length) return;
+      const [item] = s.sections.splice(idx, 1);
+      s.sections.splice(to, 0, item);
+      this.markDirty();
+      MPC.bus.emit('sections:changed');
+    },
+    clearSection(id) {
+      const section = this.state.sections.find((s) => s.id === id);
+      if (section) { sequencer.clearSection(section); this.markDirty(); }
+    },
+
+    // ---- sample resolution (shared by bank/project load) ------------------
+    async resolveSample(sampleId) {
+      if (!sampleId) return null;
+      if (this.sampleCache.has(sampleId)) return this.sampleCache.get(sampleId);
+      const record = await storage.getSample(sampleId);
+      if (!record) return null;
+      const sample = await MPC.Sample.fromRecord(record);
+      this.sampleCache.set(sampleId, sample);
+      return sample;
+    },
+
+    async applyPadRecords(padRecords) {
+      const pads = [];
+      for (let i = 0; i < MPC.const.NUM_PADS; i++) {
+        const rec = padRecords[i];
+        const pad = rec ? models.padFromRecord(rec, i) : models.defaultPad(i);
+        if (pad.sampleId) {
+          pad.sample = await this.resolveSample(pad.sampleId);
+          if (!pad.sample) { pad.sampleId = null; }
+          else if (pad.trimEnd == null) pad.trimEnd = pad.sample.duration;
+        }
+        pads.push(pad);
+      }
+      this.state.pads = pads;
+      this.syncAllPadChannels();
+      MPC.bus.emit('pads:changed');
+    },
+
+    // ---- banks ------------------------------------------------------------
+    async saveBank(name) {
+      const s = this.state;
+      const bank = {
+        id: s.bankId || MPC.util.uid('bank'),
+        name: name || s.bankName || 'Untitled Bank',
+        pads: s.pads.map(models.padToRecord),
+      };
+      await storage.saveBank(bank);
+      s.bankId = bank.id;
+      s.bankName = bank.name;
+      MPC.bus.emit('library:changed');
+      MPC.toast('Saved bank “' + bank.name + '”');
+    },
+    async saveBankAsNew(name) { this.state.bankId = null; return this.saveBank(name); },
+
+    async loadBank(id) {
+      const bank = await storage.getBank(id);
+      if (!bank) { MPC.toast('Bank not found', 'error'); return; }
+      await this.applyPadRecords(bank.pads || []);
+      this.state.bankId = bank.id;
+      this.state.bankName = bank.name;
+      MPC.bus.emit('library:changed');
+      MPC.toast('Loaded bank “' + bank.name + '”');
+    },
+    async deleteBank(id) {
+      await storage.deleteBank(id);
+      if (this.state.bankId === id) this.state.bankId = null;
+      MPC.bus.emit('library:changed');
+    },
+
+    // ---- projects ---------------------------------------------------------
+    serializeProject(name) {
+      const s = this.state;
+      return {
+        id: s.projectId || MPC.util.uid('proj'),
+        name: name || s.projectName || 'Untitled Project',
+        bpm: s.bpm,
+        beatsPerBar: s.beatsPerBar,
+        barsPerSection: s.barsPerSection,
+        quantize: s.quantize,
+        metronomeOn: s.metronomeOn,
+        countIn: s.countIn,
+        masterVolume: s.masterVolume,
+        bankName: s.bankName,
+        pads: s.pads.map(models.padToRecord),
+        sections: s.sections.map((sec) => ({
+          id: sec.id, name: sec.name, color: sec.color, bars: sec.bars,
+          repeats: sec.repeats, volumeDb: sec.volumeDb, muted: sec.muted,
+          eq: MPC.util.clone(sec.eq),
+          events: sec.events.map((e) => ({ padIndex: e.padIndex, time: e.time, rawTime: e.rawTime, velocity: e.velocity })),
+        })),
+      };
+    },
+
+    async saveProject(name) {
+      const project = this.serializeProject(name);
+      await storage.saveProject(project);
+      this.state.projectId = project.id;
+      this.state.projectName = project.name;
+      this.state.dirty = false;
+      MPC.bus.emit('library:changed');
+      MPC.bus.emit('project:changed');
+      MPC.toast('Saved project “' + project.name + '”');
+    },
+    async saveProjectAsNew(name) { this.state.projectId = null; return this.saveProject(name); },
+
+    async loadProject(id) {
+      const project = await storage.getProject(id);
+      if (!project) { MPC.toast('Project not found', 'error'); return; }
+      const s = this.state;
+      this.stopEverything();
+      s.projectId = project.id;
+      s.projectName = project.name;
+      s.bpm = project.bpm;
+      s.beatsPerBar = project.beatsPerBar;
+      s.barsPerSection = project.barsPerSection;
+      s.quantize = project.quantize || '1/16';
+      s.metronomeOn = project.metronomeOn !== false;
+      s.countIn = project.countIn !== false;
+      s.masterVolume = project.masterVolume != null ? project.masterVolume : 0.9;
+      s.bankName = project.bankName || 'Untitled Bank';
+      s.sections = (project.sections || []).map((sec) => Object.assign(MPC.models.makeSection(sec.name, sec.bars), sec, { eq: Object.assign(MPC.models.defaultEq(), sec.eq || {}) }));
+      s.selectedSectionId = s.sections.length ? s.sections[0].id : null;
+      this.applyTransportSettings();
+      if (engine.master) engine.master.setVolume(s.masterVolume);
+      await this.applyPadRecords(project.pads || []);
+      s.dirty = false;
+      MPC.bus.emit('settings:changed');
+      MPC.bus.emit('sections:changed');
+      MPC.bus.emit('project:changed');
+      MPC.bus.emit('library:changed');
+      MPC.toast('Loaded project “' + project.name + '”');
+    },
+    async deleteProject(id) {
+      await storage.deleteProject(id);
+      if (this.state.projectId === id) this.state.projectId = null;
+      MPC.bus.emit('library:changed');
+    },
+
+    newProject() {
+      this.stopEverything();
+      const s = this.state;
+      s.projectId = null;
+      s.projectName = 'Untitled Project';
+      s.sections = [];
+      s.selectedSectionId = null;
+      s.dirty = false;
+      MPC.bus.emit('sections:changed');
+      MPC.bus.emit('project:changed');
+      MPC.toast('Started a new project');
+    },
+  };
+
+  MPC.app = App;
+})();
