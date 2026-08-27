@@ -117,6 +117,29 @@
         if (name) App.saveProjectAsNew(name);
       });
 
+      // portable project files
+      qs('#project-export-file').addEventListener('click', () => App.exportProjectFile());
+      const fileInput = qs('#project-file-input');
+      qs('#project-import-file').addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', () => {
+        const f = fileInput.files && fileInput.files[0];
+        if (f) App.importProjectFile(f);
+        fileInput.value = '';
+      });
+
+      // In the Artifact sandbox, audio/ZIP downloads are blocked by the platform,
+      // so steer export toward the portable project file instead.
+      if (MPC.host && MPC.host.isArtifact) {
+        const sec = qs('.lib-section.export');
+        MPC.dom.qsa('.checkbox', sec).forEach((n) => (n.style.display = 'none'));
+        qs('#export-btn').style.display = 'none';
+        const note = el('div', { class: 'sandbox-note' });
+        note.innerHTML = 'You’re running the live in-session build. Jam, record and mix here — your work is saved in this page. ' +
+          'To bounce <strong>WAV stems for FL Studio</strong>, click <strong>“⬇ Project file”</strong> above to download a <code>.json</code> (with your sounds embedded), ' +
+          'then open the standalone build from your repo and use its <strong>Export ZIP</strong>.';
+        sec.appendChild(note);
+      }
+
       // export
       qs('#export-btn').addEventListener('click', runExport);
       MPC.bus.on('export:progress', (p) => { qs('#export-progress').textContent = p.label || ''; });

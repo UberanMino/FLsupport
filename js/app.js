@@ -353,16 +353,14 @@
     },
     async saveProjectAsNew(name) { this.state.projectId = null; return this.saveProject(name); },
 
-    async loadProject(id) {
-      const project = await storage.getProject(id);
-      if (!project) { MPC.toast('Project not found', 'error'); return; }
+    async applyProjectObject(project) {
       const s = this.state;
       this.stopEverything();
-      s.projectId = project.id;
-      s.projectName = project.name;
-      s.bpm = project.bpm;
-      s.beatsPerBar = project.beatsPerBar;
-      s.barsPerSection = project.barsPerSection;
+      s.projectId = project.id || MPC.util.uid('proj');
+      s.projectName = project.name || 'Untitled Project';
+      s.bpm = project.bpm || MPC.const.DEFAULT_BPM;
+      s.beatsPerBar = project.beatsPerBar || MPC.const.DEFAULT_BEATS_PER_BAR;
+      s.barsPerSection = project.barsPerSection || MPC.const.DEFAULT_BARS_PER_SECTION;
       s.quantize = project.quantize || '1/16';
       s.metronomeOn = project.metronomeOn !== false;
       s.countIn = project.countIn !== false;
@@ -378,7 +376,55 @@
       MPC.bus.emit('sections:changed');
       MPC.bus.emit('project:changed');
       MPC.bus.emit('library:changed');
+    },
+
+    async loadProject(id) {
+      const project = await storage.getProject(id);
+      if (!project) { MPC.toast('Project not found', 'error'); return; }
+      await this.applyProjectObject(project);
       MPC.toast('Loaded project “' + project.name + '”');
+    },
+
+    // ---- portable project files (.json with embedded audio) ---------------
+    async exportProjectFile() {
+      const s = this.state;
+      const project = this.serializeProject(s.projectName);
+      const ids = new Set();
+      s.pads.forEach((p) => { if (p.sampleId) ids.add(p.sampleId); });
+      const samples = [];
+      for (const id of ids) {
+        let rec = await storage.getSample(id);
+        if (!rec && this.sampleCache.has(id)) rec = MPC.Sample.toRecord(this.sampleCache.get(id));
+        if (!rec) continue;
+        samples.push({ id: rec.id, name: rec.name, type: rec.type, duration: rec.duration, dataB64: MPC.util.abToBase64(rec.data) });
+      }
+      const bundle = { format: 'mpc-studio-project', version: 1, project, samples };
+      const fname = MPC.util.sanitizeFilename(s.projectName) + '.json';
+      const ok = await MPC.host.saveFile(fname, JSON.stringify(bundle));
+      if (ok) MPC.toast('Project file saved (' + samples.length + ' sound' + (samples.length === 1 ? '' : 's') + ' embedded).');
+      return ok;
+    },
+
+    async importProjectFile(file) {
+      try {
+        const bundle = JSON.parse(await file.text());
+        if (!bundle || bundle.format !== 'mpc-studio-project' || !bundle.project) {
+          throw new Error('Not an MPC Studio project file.');
+        }
+        for (const smp of (bundle.samples || [])) {
+          if (this.sampleCache.has(smp.id)) continue;
+          const rec = { id: smp.id, name: smp.name, type: smp.type, data: MPC.util.base64ToAb(smp.dataB64), duration: smp.duration };
+          try { await storage.saveSample(rec); } catch (e) { /* storage may be unavailable */ }
+          try { this.sampleCache.set(smp.id, await MPC.Sample.fromRecord(rec)); } catch (e) { /* keep going */ }
+        }
+        await this.applyProjectObject(bundle.project);
+        try { await storage.saveProject(this.serializeProject(bundle.project.name)); } catch (e) { /* ignore */ }
+        MPC.bus.emit('library:changed');
+        MPC.toast('Imported project “' + bundle.project.name + '”.');
+      } catch (err) {
+        console.error(err);
+        MPC.toast('Import failed: ' + err.message, 'error');
+      }
     },
     async deleteProject(id) {
       await storage.deleteProject(id);

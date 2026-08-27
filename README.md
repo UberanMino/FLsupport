@@ -13,6 +13,17 @@ loop after loop into a playlist → mix a little → export the stems.*
 
 ## Run it
 
+There are two ways to run the exact same app:
+
+- **Standalone build** (this repo) — full features **including WAV/ZIP stem
+  export**. Open it directly or serve it (below).
+- **Live in-session build** — a single-file version published as a claude.ai
+  Artifact so you can jam right in the chat. Everything works there *except*
+  audio-file downloads (the Artifact sandbox blocks `.wav`/`.zip`). To get stems
+  out, use **⬇ Project file** to download a portable `.json` (your sounds are
+  embedded), then open the standalone build, **⬆ Load file**, and **Export ZIP**.
+  Rebuild the single file any time with `node tools/build-artifact.js`.
+
 **Option A — open the file.** Double-click `index.html` (or drag it into a
 browser). Works offline. In Chrome/Edge this includes saving banks & projects.
 
@@ -80,6 +91,9 @@ own **3-band EQ** — so each part of the arrangement can sit differently.
   load, save-as, delete.
 - **Projects** save *everything*: tempo, pads, all recorded sections and their
   mixing. Come back and pick up where you left off.
+- **⬇ Project file / ⬆ Load file** export or import a project as a portable
+  `.json` with the audio embedded — move a session between machines or between
+  the live and standalone builds.
 - All data lives in your browser (IndexedDB) — nothing is uploaded anywhere.
 
 ### ⬇ Export for FL Studio

@@ -95,6 +95,11 @@
             </div>
           </div>
           <ul id="projects-list" class="lib-list"></ul>
+          <div class="proj-file-actions">
+            <button id="project-export-file" class="mini" title="Download this project as a portable .json file (sounds embedded)">⬇ Project file</button>
+            <button id="project-import-file" class="mini" title="Load a project from a .json file">⬆ Load file</button>
+            <input id="project-file-input" type="file" accept="application/json,.json" hidden />
+          </div>
         </section>
 
         <section class="lib-section export">
@@ -144,6 +149,7 @@
   <script src="js/transport.js"></script>
   <script src="js/sequencer.js"></script>
   <script src="js/render.js"></script>
+  <script src="js/host-bridge.js"></script>
   <script src="js/app.js"></script>
   <script src="js/ui-pads.js"></script>
   <script src="js/ui-mixer.js"></script>

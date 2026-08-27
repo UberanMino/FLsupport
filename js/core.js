@@ -106,6 +106,21 @@
         .replace(/\s+/g, '_')
         .slice(0, 60) || 'untitled';
     },
+
+    abToBase64(ab) {
+      const bytes = new Uint8Array(ab);
+      let bin = '';
+      const CH = 0x8000;
+      for (let i = 0; i < bytes.length; i += CH) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + CH));
+      return btoa(bin);
+    },
+    base64ToAb(b64) {
+      const bin = atob(b64);
+      const len = bin.length;
+      const bytes = new Uint8Array(len);
+      for (let i = 0; i < len; i++) bytes[i] = bin.charCodeAt(i);
+      return bytes.buffer;
+    },
   };
   MPC.util = util;
 

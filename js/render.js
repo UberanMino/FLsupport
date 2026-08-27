@@ -264,7 +264,7 @@
       entries.push({ name: 'README.txt', bytes: new TextEncoder().encode(manifest.join('\n')) });
       MPC.bus.emit('export:progress', { label: 'Packaging…' });
       const zip = MPC.encoders.zip(entries);
-      MPC.util.download(zip, projName + '_export.zip');
+      await MPC.host.saveFile(projName + '_export.zip', zip);
       MPC.bus.emit('export:done');
     },
   };
