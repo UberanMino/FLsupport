@@ -46,6 +46,21 @@
     };
   }
 
+  // A clip is a placement of a section (pattern) on the timeline grid.
+  // It plays the section's loop, tiled, for `lenBars`, starting `srcOffsetSec`
+  // into the loop (slicing changes offset + length).
+  function makeClip(sectionId, opts) {
+    opts = opts || {};
+    return {
+      id: MPC.util.uid('clip'),
+      sectionId,
+      lane: opts.lane || 0,
+      startBar: opts.startBar || 0,
+      lenBars: opts.lenBars || 1,
+      srcOffsetSec: opts.srcOffsetSec || 0,
+    };
+  }
+
   // Strip runtime fields from a pad for persistence.
   function padToRecord(pad) {
     return {
@@ -69,5 +84,5 @@
     return Object.assign(pad, record, { eq: Object.assign(defaultEq(), record.eq || {}) });
   }
 
-  MPC.models = { defaultEq, defaultPad, makeSection, padToRecord, padFromRecord };
+  MPC.models = { defaultEq, defaultPad, makeSection, makeClip, padToRecord, padFromRecord };
 })();

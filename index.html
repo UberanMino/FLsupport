@@ -34,7 +34,8 @@
         <div class="ctl">
           <label>Bars</label>
           <select id="bars-per-section" title="Bars per section (loop length)">
-            <option>1</option><option selected>2</option><option>4</option><option>8</option>
+            <option>1</option><option selected>2</option><option>4</option>
+            <option>8</option><option>16</option><option>32</option>
           </select>
         </div>
         <div class="ctl">
@@ -113,26 +114,56 @@
         </section>
       </aside>
 
-      <!-- CENTER: pads + pad mixer -->
-      <section id="center-panel" class="panel">
-        <div class="pad-area">
-          <div id="pad-grid" class="pad-grid"></div>
-          <p class="hint">Drop an audio file on a pad to load it. Play with your keyboard:
-            <code>1234 / qwer / asdf / zxcv</code>. Click a pad to edit it below.</p>
+      <!-- CENTER: tabbed workspace (MPC | Playlist) -->
+      <section id="workspace">
+        <div id="tab-bar" role="tablist">
+          <button class="tab active" data-tab="mpc" role="tab">🥁 MPC</button>
+          <button class="tab" data-tab="playlist" role="tab">🎚 Playlist</button>
         </div>
-        <div id="pad-editor" class="pad-editor"></div>
-      </section>
+        <div id="tab-body">
+          <!-- MPC tab -->
+          <section id="tab-mpc" class="tab-panel panel active">
+            <div class="pad-area">
+              <div id="pad-grid" class="pad-grid"></div>
+              <p class="hint">Drop an audio file on a pad to load it. Play with your keyboard:
+                <code>1234 / qwer / asdf / zxcv</code>. Click a pad to edit it below.</p>
+            </div>
+            <div id="pad-editor" class="pad-editor"></div>
+          </section>
 
-      <!-- RIGHT: playlist / arrangement -->
-      <aside id="arrangement-panel" class="panel">
-        <div class="arr-head">
-          <h3>Playlist</h3>
-          <span class="arr-hint">Record sections one after another</span>
+          <!-- Playlist tab -->
+          <section id="tab-playlist" class="tab-panel panel">
+            <div id="pl-toolbar">
+              <div class="pl-group">
+                <button id="pl-play" class="tbtn play" title="Play playlist">▶</button>
+                <button id="pl-stop" class="tbtn" title="Stop">■</button>
+                <button id="pl-loop" class="tbtn" title="Loop playlist">↻</button>
+              </div>
+              <div class="pl-group tools">
+                <span class="pl-label">Tool</span>
+                <button id="pl-tool-select" class="tool active" title="Select / move / resize clips">▚ Select</button>
+                <button id="pl-tool-slice" class="tool" title="Slice clips">✂ Slice</button>
+              </div>
+              <div class="pl-group">
+                <span class="pl-label">Snap</span>
+                <select id="pl-snap" title="Snap to grid">
+                  <option value="bar" selected>Bar</option>
+                  <option value="beat">Beat</option>
+                  <option value="off">Off</option>
+                </select>
+              </div>
+              <div class="pl-group">
+                <span class="pl-label">Zoom</span>
+                <button id="pl-zoom-out" class="mini" title="Zoom out">−</button>
+                <button id="pl-zoom-in" class="mini" title="Zoom in">+</button>
+              </div>
+              <span id="pl-hint" class="pl-hint">Drag to move · edge to resize · ✂ to chop</span>
+            </div>
+            <div id="pl-scroll"><div id="pl-grid"></div></div>
+            <div id="section-editor" class="section-editor"></div>
+          </section>
         </div>
-        <div id="playhead-bar" class="playhead-bar"><div id="playhead-fill"></div></div>
-        <ul id="sections-list" class="sections-list"></ul>
-        <div id="section-editor" class="section-editor"></div>
-      </aside>
+      </section>
     </main>
   </div>
 
@@ -154,7 +185,8 @@
   <script src="js/ui-pads.js"></script>
   <script src="js/ui-mixer.js"></script>
   <script src="js/ui-transport.js"></script>
-  <script src="js/ui-arrangement.js"></script>
+  <script src="js/ui-tabs.js"></script>
+  <script src="js/ui-playlist.js"></script>
   <script src="js/ui-library.js"></script>
   <script src="js/ui-main.js"></script>
 </body>

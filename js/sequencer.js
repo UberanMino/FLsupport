@@ -151,74 +151,85 @@
       }
     },
 
-    // ---- arrangement (playlist) playback ---------------------------------
-    buildArrangementPlan() {
+    // ---- timeline (FL-style playlist) playback ---------------------------
+    // Flatten every clip into absolute-time voice events. Section volume is
+    // baked into velocity so overlapping clips can share one monitor bus;
+    // per-section EQ is applied accurately on export (render.js).
+    buildTimelineEvents() {
       const st = MPC.app.state;
-      const spb = 60 / st.bpm;
-      const beatsPerBar = st.beatsPerBar;
-      let beat = 0;
-      const placements = [];
-      for (const section of st.sections) {
-        const loopBeats = section.bars * beatsPerBar;
-        const reps = Math.max(1, section.repeats || 1);
-        placements.push({
-          section,
-          startBeat: beat,
-          loopBeats,
-          loopSec: loopBeats * spb,
-          reps,
-        });
-        beat += loopBeats * reps;
+      const barLen = MPC.app.barLenSec();
+      const events = [];
+      for (const clip of st.clips) {
+        const section = st.sections.find((s) => s.id === clip.sectionId);
+        if (!section || section.muted) continue;
+        const loopLen = section.bars * barLen;
+        if (loopLen <= 0) continue;
+        const clipStart = clip.startBar * barLen;
+        const clipDur = clip.lenBars * barLen;
+        const secVol = MPC.util.clamp(dbToGain(section.volumeDb || 0), 0, 4);
+        for (const e of section.events) {
+          const pad = this.resolvePad(e.padIndex);
+          if (!pad || pad.muted) continue;
+          let n = Math.ceil((clip.srcOffsetSec - e.time) / loopLen - 1e-9);
+          for (; ; n++) {
+            const occ = e.time + n * loopLen;
+            if (occ >= clip.srcOffsetSec + clipDur - 1e-9) break;
+            if (occ >= clip.srcOffsetSec - 1e-9) {
+              events.push({
+                padIndex: e.padIndex,
+                when: clipStart + (occ - clip.srcOffsetSec),
+                velocity: MPC.util.clamp(e.velocity * secVol, 0, 1),
+              });
+            }
+          }
+        }
       }
-      return { placements, totalBeats: beat, spb };
+      events.sort((a, b) => a.when - b.when);
+      return events;
     },
 
     playArrangement(opts) {
       opts = opts || {};
       const st = MPC.app.state;
-      if (!st.sections.length) { MPC.toast('Nothing in the playlist yet.', 'error'); return; }
-      const plan = this.buildArrangementPlan();
-      const spb = plan.spb;
+      if (!st.clips.length) { MPC.toast('The playlist is empty — record a section first.', 'error'); return; }
+      this._timeline = this.buildTimelineEvents();
+      if (!this._timeline.length) { MPC.toast('Nothing to play in the playlist yet.', 'error'); return; }
+      this._timelineTotalSec = MPC.app.totalTimelineBars() * MPC.app.barLenSec();
+      // Neutralise the shared bus — section volume is already baked in.
+      MPC.engine.sectionBus.setEq(MPC.models.defaultEq());
+      MPC.engine.sectionBus.setVolume(1);
       MPC.transport.beatsPerBar = st.beatsPerBar;
       MPC.transport.setTempo(st.bpm);
-      MPC.transport.scheduleNotes = (from, to) => this._scheduleArrangement(from, to);
-      MPC.transport.startArrangement(plan.totalBeats, { loop: !!opts.loop });
-
-      const startTime = MPC.transport._startTime;
-      // Resolve absolute times and pre-schedule per-section bus automation.
-      plan.placements.forEach((p) => {
-        p.startTime = startTime + p.startBeat * spb;
-        const vol = dbToGain(p.section.volumeDb || 0);
-        MPC.engine.sectionBus.nodes.gain.gain.setValueAtTime(vol, Math.max(startTime, p.startTime - 0.001));
-        MPC.engine.applyEq(MPC.engine.sectionBus.nodes, p.section.eq, Math.max(startTime, p.startTime - 0.001));
-      });
-      this._arrangement = { plan, startTime, spb };
+      MPC.transport.scheduleNotes = (from, to) => this._scheduleTimeline(from, to);
+      MPC.transport.startArrangement(MPC.app.totalTimelineBars() * st.beatsPerBar, { loop: !!opts.loop });
       MPC.bus.emit('sequencer:arrangement-start');
     },
 
     stopArrangement() {
       MPC.transport.stop();
       MPC.transport.scheduleNotes = null;
-      this._arrangement = null;
+      this._timeline = null;
       MPC.bus.emit('sequencer:arrangement-stop');
     },
 
-    _scheduleArrangement(from, to) {
-      const arr = this._arrangement;
-      if (!arr) return;
+    _scheduleTimeline(from, to) {
+      const tl = this._timeline;
+      if (!tl) return;
+      const base = MPC.transport._startTime;
+      const total = this._timelineTotalSec;
+      const loop = MPC.transport.loopArrangement;
       const now = MPC.engine.now();
-      for (const p of arr.plan.placements) {
-        if (p.section.muted) continue;
-        for (let r = 0; r < p.reps; r++) {
-          const loopStart = p.startTime + r * p.loopSec;
-          if (loopStart >= to || loopStart + p.loopSec <= from) continue;
-          for (const ev of p.section.events) {
+      const pMin = loop ? Math.max(0, Math.floor((from - base) / total)) : 0;
+      const pMax = loop ? Math.floor((to - base) / total) + 1 : 0;
+      for (let p = pMin; p <= pMax; p++) {
+        const offset = base + p * total;
+        for (const ev of tl) {
+          const when = offset + ev.when;
+          if (when < from) continue;
+          if (when >= to) break; // tl is sorted by when
+          if (when >= now - 0.001) {
             const pad = this.resolvePad(ev.padIndex);
-            if (!pad || pad.muted) continue;
-            const when = loopStart + ev.time;
-            if (when >= from && when < to && when >= now - 0.001) {
-              this._voice(pad, ev.padIndex, when, ev.velocity);
-            }
+            if (pad && !pad.muted) this._voice(pad, ev.padIndex, when, ev.velocity);
           }
         }
       }

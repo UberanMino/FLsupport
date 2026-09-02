@@ -50,7 +50,8 @@
     MPC.uiPads.init();
     MPC.uiMixer.init();
     MPC.uiTransport.init();
-    MPC.uiArrangement.init();
+    MPC.uiTabs.init();
+    MPC.uiPlaylist.init();
     MPC.uiLibrary.init();
 
     // Warn about unsaved work.

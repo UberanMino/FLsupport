@@ -64,16 +64,12 @@
       const clearPlay = () => {
         qs('#play-arrangement-btn').classList.remove('active');
         if (!MPC.sequencer.recording) setStatus('Ready');
-        qs('#playhead-fill').style.width = '0%';
       };
       MPC.bus.on('sequencer:arrangement-stop', clearPlay);
       MPC.bus.on('transport:arrangement-end', clearPlay);
-      MPC.bus.on('transport:stop', () => { qs('#playhead-fill').style.width = '0%'; });
 
       MPC.bus.on('transport:position', (p) => {
-        const fill = qs('#playhead-fill');
         if (p.mode === 'loop') {
-          fill.style.width = (p.fraction * 100).toFixed(1) + '%';
           if (p.countIn) {
             setStatus('Count-in…', MPC.sequencer.recording ? 'rec' : 'play');
           } else {
@@ -86,7 +82,6 @@
               MPC.sequencer.recording ? 'rec' : 'play');
           }
         } else {
-          fill.style.width = (p.fraction * 100).toFixed(1) + '%';
           setStatus('▶ ' + MPC.util.formatTime(Math.max(0, p.positionSec)) + ' / ' + MPC.util.formatTime(p.totalSec), 'play');
         }
       });

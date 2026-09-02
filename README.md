@@ -57,6 +57,9 @@ then open <http://localhost:8000>.
   ```
 - Click a pad to open it in the **pad editor** below the grid.
 
+The workspace has two tabs: **🥁 MPC** (pads + pad mixer) and **🎚 Playlist**
+(the timeline grid). Finishing a recording jumps you to the Playlist.
+
 ### 🎚 Per-pad mixing
 Select a pad to adjust:
 - **Length / trim** — drag the yellow handles on the waveform to set the start
@@ -66,25 +69,38 @@ Select a pad to adjust:
 - **3-band EQ** — Low / Mid (sweepable frequency + Q) / High.
 
 ### ⏱ Tempo, metronome & count-in
-- Set **BPM**, **meter** (beats per bar) and **bars per section** (loop length)
-  in the top bar.
+- Set **BPM**, **meter** (beats per bar) and **bars per section** — the loop
+  length, now up to **32 bars** — in the top bar.
 - **🎵 Click** toggles the metronome; **Count-in** gives you a one-bar count
   before recording starts.
 - **Quantize** snaps recorded hits to a grid (1/4 … 1/32, incl. triplets, or Off).
 
-### 🔁 Loop station → Playlist
+### 🔁 Loop station
 - Hit **● Rec** to record a new **section**: the transport loops your chosen bar
   length while you play; hits are captured and quantized. Keep playing to
   **overdub** more layers into the same loop.
-- Press **■ Stop** to finish. The section lands in the **Playlist** on the right.
-- Record the next section the same way — **one after another** — to build an
-  arrangement. Each row has: loop-preview ▶, **overdub ●+**, reorder ▲▼,
-  duplicate ⧉, delete ✕.
-- **▶ Play** plays the whole playlist top to bottom; **↻** loops it.
+- Press **■ Stop** to finish — the loop drops onto the **Playlist** as a clip.
+- Record the next section the same way — **one after another** — to build up the
+  arrangement.
+
+### 🎚 The Playlist (FL-style timeline)
+A grid with bars across the top and lanes down the side. Each recorded loop
+appears as a **clip showing its waveform**:
+- **Move** — drag a clip along the timeline or between lanes (clips in different
+  lanes play together).
+- **Resize / loop** — drag a clip's right edge; extend past its length and the
+  loop repeats to fill.
+- **Chop** — switch to the **✂ Slice** tool and click a clip to split it at that
+  grid line. Great for rearranging or dropping part of a groove.
+- **Duplicate / delete** — from the clip's mixer below, or `Delete` on the
+  keyboard.
+- **Snap** to Bar / Beat / Off, and **zoom** in/out. **▶ Play** runs the whole
+  timeline; **↻** loops it. A green **playhead** tracks playback.
 
 ### 🎛 Per-section mixing
-Select a section to set its **Volume**, **Repeats** (×1–16), **Mute**, and its
-own **3-band EQ** — so each part of the arrangement can sit differently.
+Select a clip to set its section's **Volume**, **Mute** and **3-band EQ** — so
+each part of the arrangement can sit differently. (Per-section EQ is applied
+exactly on export/bounce.)
 
 ### 💾 Sound banks & projects
 - **Sound Banks** save a set of pads + their sounds and mix settings. Save,
@@ -126,9 +142,11 @@ Vanilla JS modules under `js/` (no dependencies), styled by `styles/main.css`:
 | `export-encoders.js` | WAV + CRC32 + ZIP writers |
 | `sample.js` | decode + waveform peaks |
 | `audio-engine.js` | live Web Audio graph (pad channels, EQ, master) |
-| `models.js` | pad / section / EQ data model |
+| `models.js` | pad / section / clip / EQ data model |
 | `transport.js` | clock, lookahead scheduler, metronome |
-| `sequencer.js` | recording, quantize, loop & arrangement scheduling |
-| `render.js` | offline rendering → stems / sections / master |
+| `sequencer.js` | recording, quantize, loop & clip-timeline scheduling |
+| `render.js` | offline rendering → stems / sections / master + clip waveforms |
+| `host-bridge.js` | file saving (browser download or Artifact `downloads`) |
 | `app.js` | central state + actions |
-| `ui-*.js` | pads, mixer, transport, arrangement, library, bootstrap |
+| `ui-*.js` | pads, mixer, transport, tabs, playlist grid, library, bootstrap |
+| `tools/build-artifact.js` | inline everything into one self-contained page |

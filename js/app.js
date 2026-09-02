@@ -29,9 +29,21 @@
 
       selectedPad: 0,
       pads: [],
-      sections: [],
+      sections: [],           // recorded loops (patterns)
+      clips: [],              // placements of sections on the timeline grid
       selectedSectionId: null,
+      selectedClipId: null,
       dirty: false,
+    },
+
+    // seconds per bar at the current tempo/meter
+    barLenSec() { return this.state.beatsPerBar * (60 / this.state.bpm); },
+
+    // total timeline length in bars (grid extent)
+    totalTimelineBars() {
+      let end = 0;
+      this.state.clips.forEach((c) => { end = Math.max(end, c.startBar + c.lenBars); });
+      return Math.max(8, Math.ceil(end));
     },
 
     init() {
@@ -130,7 +142,7 @@
       MPC.bus.emit('settings:changed');
     },
     setBarsPerSection(n) {
-      this.state.barsPerSection = MPC.util.clamp(n, 1, 16);
+      this.state.barsPerSection = MPC.util.clamp(n, 1, MPC.const.MAX_BARS_PER_SECTION);
       this.markDirty();
       MPC.bus.emit('settings:changed');
     },
@@ -168,10 +180,21 @@
         section.color = MPC.const.PAD_COLORS[(s.sections.length * 3) % MPC.const.PAD_COLORS.length];
         s.sections.push(section);
         s.selectedSectionId = section.id;
+        // Drop a clip onto the timeline right after the last clip in lane 0.
+        const clip = models.makeClip(section.id, { lane: 0, startBar: this.nextFreeBar(0), lenBars: section.bars });
+        s.clips.push(clip);
+        s.selectedClipId = clip.id;
         this.markDirty();
         MPC.bus.emit('sections:changed');
+        MPC.bus.emit('clips:changed');
         sequencer.startRecording(section);
       });
+    },
+
+    nextFreeBar(lane) {
+      let end = 0;
+      this.state.clips.forEach((c) => { if (c.lane === lane) end = Math.max(end, c.startBar + c.lenBars); });
+      return end;
     },
 
     overdubSection(id) {
@@ -226,9 +249,11 @@
     deleteSection(id) {
       const s = this.state;
       s.sections = s.sections.filter((x) => x.id !== id);
+      s.clips = s.clips.filter((c) => c.sectionId !== id);
       if (s.selectedSectionId === id) s.selectedSectionId = s.sections.length ? s.sections[0].id : null;
       this.markDirty();
       MPC.bus.emit('sections:changed');
+      MPC.bus.emit('clips:changed');
     },
     duplicateSection(id) {
       const s = this.state;
@@ -256,6 +281,88 @@
     clearSection(id) {
       const section = this.state.sections.find((s) => s.id === id);
       if (section) { sequencer.clearSection(section); this.markDirty(); }
+    },
+
+    // ---- clips (timeline placements) --------------------------------------
+    getSelectedClip() { return this.state.clips.find((c) => c.id === this.state.selectedClipId) || null; },
+    getClipSection(clip) { return clip && this.state.sections.find((s) => s.id === clip.sectionId) || null; },
+
+    selectClip(id) {
+      const clip = this.state.clips.find((c) => c.id === id);
+      this.state.selectedClipId = id;
+      if (clip) this.state.selectedSectionId = clip.sectionId;
+      MPC.bus.emit('clip:selected', { clipId: id });
+    },
+
+    moveClip(id, changes) {
+      const clip = this.state.clips.find((c) => c.id === id);
+      if (!clip) return;
+      if (changes.startBar != null) clip.startBar = Math.max(0, changes.startBar);
+      if (changes.lane != null) clip.lane = MPC.util.clamp(changes.lane, 0, MPC.const.NUM_LANES - 1);
+      this.markDirty();
+      MPC.bus.emit('clips:changed');
+    },
+
+    resizeClip(id, lenBars) {
+      const clip = this.state.clips.find((c) => c.id === id);
+      if (!clip) return;
+      const minBars = 1 / this.state.beatsPerBar; // one beat
+      clip.lenBars = Math.max(minBars, lenBars);
+      this.markDirty();
+      MPC.bus.emit('clips:changed');
+    },
+
+    sliceClip(id, atBarWithinClip) {
+      const s = this.state;
+      const clip = s.clips.find((c) => c.id === id);
+      if (!clip) return;
+      const minBars = 1 / s.beatsPerBar;
+      if (atBarWithinClip <= minBars / 2 || atBarWithinClip >= clip.lenBars - minBars / 2) return;
+      const right = models.makeClip(clip.sectionId, {
+        lane: clip.lane,
+        startBar: clip.startBar + atBarWithinClip,
+        lenBars: clip.lenBars - atBarWithinClip,
+        srcOffsetSec: clip.srcOffsetSec + atBarWithinClip * this.barLenSec(),
+      });
+      clip.lenBars = atBarWithinClip;
+      const idx = s.clips.indexOf(clip);
+      s.clips.splice(idx + 1, 0, right);
+      s.selectedClipId = right.id;
+      this.markDirty();
+      MPC.bus.emit('clips:changed');
+    },
+
+    duplicateClip(id) {
+      const s = this.state;
+      const clip = s.clips.find((c) => c.id === id);
+      if (!clip) return;
+      const copy = models.makeClip(clip.sectionId, {
+        lane: clip.lane,
+        startBar: clip.startBar + clip.lenBars,
+        lenBars: clip.lenBars,
+        srcOffsetSec: clip.srcOffsetSec,
+      });
+      s.clips.push(copy);
+      s.selectedClipId = copy.id;
+      this.markDirty();
+      MPC.bus.emit('clips:changed');
+    },
+
+    deleteClip(id) {
+      const s = this.state;
+      const clip = s.clips.find((c) => c.id === id);
+      if (!clip) return;
+      s.clips = s.clips.filter((c) => c.id !== id);
+      // prune the section if no clip references it any more
+      if (!s.clips.some((c) => c.sectionId === clip.sectionId)) {
+        s.sections = s.sections.filter((sec) => sec.id !== clip.sectionId);
+      }
+      if (s.selectedClipId === id) s.selectedClipId = s.clips.length ? s.clips[0].id : null;
+      const sel = this.getSelectedClip();
+      s.selectedSectionId = sel ? sel.sectionId : (s.sections[0] ? s.sections[0].id : null);
+      this.markDirty();
+      MPC.bus.emit('clips:changed');
+      MPC.bus.emit('sections:changed');
     },
 
     // ---- sample resolution (shared by bank/project load) ------------------
@@ -338,6 +445,10 @@
           eq: MPC.util.clone(sec.eq),
           events: sec.events.map((e) => ({ padIndex: e.padIndex, time: e.time, rawTime: e.rawTime, velocity: e.velocity })),
         })),
+        clips: s.clips.map((c) => ({
+          id: c.id, sectionId: c.sectionId, lane: c.lane,
+          startBar: c.startBar, lenBars: c.lenBars, srcOffsetSec: c.srcOffsetSec,
+        })),
       };
     },
 
@@ -367,13 +478,28 @@
       s.masterVolume = project.masterVolume != null ? project.masterVolume : 0.9;
       s.bankName = project.bankName || 'Untitled Bank';
       s.sections = (project.sections || []).map((sec) => Object.assign(MPC.models.makeSection(sec.name, sec.bars), sec, { eq: Object.assign(MPC.models.defaultEq(), sec.eq || {}) }));
+      // Clips: use stored placements, or migrate old sequential sections into
+      // a single lane-0 timeline so older projects still open.
+      if (project.clips && project.clips.length) {
+        s.clips = project.clips.map((c) => Object.assign(MPC.models.makeClip(c.sectionId), c));
+      } else {
+        let bar = 0;
+        s.clips = s.sections.map((sec) => {
+          const reps = Math.max(1, sec.repeats || 1);
+          const clip = MPC.models.makeClip(sec.id, { lane: 0, startBar: bar, lenBars: sec.bars * reps });
+          bar += sec.bars * reps;
+          return clip;
+        });
+      }
       s.selectedSectionId = s.sections.length ? s.sections[0].id : null;
+      s.selectedClipId = s.clips.length ? s.clips[0].id : null;
       this.applyTransportSettings();
       if (engine.master) engine.master.setVolume(s.masterVolume);
       await this.applyPadRecords(project.pads || []);
       s.dirty = false;
       MPC.bus.emit('settings:changed');
       MPC.bus.emit('sections:changed');
+      MPC.bus.emit('clips:changed');
       MPC.bus.emit('project:changed');
       MPC.bus.emit('library:changed');
     },
@@ -438,9 +564,12 @@
       s.projectId = null;
       s.projectName = 'Untitled Project';
       s.sections = [];
+      s.clips = [];
       s.selectedSectionId = null;
+      s.selectedClipId = null;
       s.dirty = false;
       MPC.bus.emit('sections:changed');
+      MPC.bus.emit('clips:changed');
       MPC.bus.emit('project:changed');
       MPC.toast('Started a new project');
     },
