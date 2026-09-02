@@ -48,7 +48,8 @@
       if (!pad) return false;
       velocity = velocity == null ? 0.9 : velocity;
       if (!pad.muted) {
-        const when = MPC.engine.now() + 0.004;
+        // Minimal lead time: enough to render the short attack cleanly, no more.
+        const when = MPC.engine.now() + 0.003;
         this._voice(pad, padIndex, when, velocity);
       }
       if (this.recording) this._capture(padIndex, velocity);

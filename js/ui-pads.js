@@ -26,12 +26,13 @@
     cell.appendChild(el('span', { class: 'pad-name' }));
     cell.appendChild(el('span', { class: 'pad-badge' }));
 
-    // Trigger + select on press.
+    // Trigger + select on press. Fire the sound FIRST (synchronously) so it
+    // isn't delayed behind pad-selection / waveform re-rendering.
     cell.addEventListener('pointerdown', (e) => {
       e.preventDefault();
-      App.selectPad(index);
-      App.ensureAudio().then(() => MPC.sequencer.triggerPad(index, 0.95));
-      flash(index);
+      MPC.engine.resumeIfNeeded();
+      MPC.sequencer.triggerPad(index, 0.95);
+      if (App.state.selectedPad !== index) App.selectPad(index);
     });
 
     // Double-click to pick a file.
@@ -113,11 +114,10 @@
         const padIndex = MPC.const.KEY_TO_PAD[key];
         if (padIndex != null && !e.repeat) {
           e.preventDefault();
-          App.ensureAudio().then(() => {
-            MPC.sequencer.triggerPad(padIndex, 0.95);
-          });
-          App.selectPad(padIndex);
-          flash(padIndex);
+          // Sound first (synchronous), UI after — keeps the hit low-latency.
+          MPC.engine.resumeIfNeeded();
+          MPC.sequencer.triggerPad(padIndex, 0.95);
+          if (App.state.selectedPad !== padIndex) App.selectPad(padIndex);
         }
       });
 

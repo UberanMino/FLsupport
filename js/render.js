@@ -35,10 +35,11 @@
     src.buffer = sample.buffer;
     src.playbackRate.value = rate;
     const env = ctx.createGain();
-    const fade = Math.min(0.006, playDur / 2);
+    const fadeIn = Math.min(0.0015, playDur * 0.5);
+    const fadeOut = Math.min(0.005, playDur * 0.5);
     env.gain.setValueAtTime(0, when);
-    env.gain.linearRampToValueAtTime(peak, when + fade);
-    env.gain.setValueAtTime(peak, Math.max(when + fade, when + playDur - fade));
+    env.gain.linearRampToValueAtTime(peak, when + fadeIn);
+    env.gain.setValueAtTime(peak, Math.max(when + fadeIn, when + playDur - fadeOut));
     env.gain.linearRampToValueAtTime(0, when + playDur);
     src.connect(env); env.connect(destination);
     src.start(when, trimStart, bufDur);

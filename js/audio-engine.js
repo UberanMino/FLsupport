@@ -49,6 +49,24 @@
     set(nodes.high.gain, eq.high.gain);
   }
 
+  // Gentle soft-clip curve: linear below ±0.7, saturates toward ±1 above it, so
+  // peaks are tamed without altering normal-level signal and without latency.
+  function makeSoftClipCurve() {
+    const n = 2048;
+    const curve = new Float32Array(n);
+    const thr = 0.7;
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      const a = Math.abs(x);
+      if (a <= thr) { curve[i] = x; }
+      else {
+        const t = (a - thr) / (1 - thr);
+        curve[i] = Math.sign(x) * (thr + (1 - thr) * Math.tanh(t * 1.6) / Math.tanh(1.6));
+      }
+    }
+    return curve;
+  }
+
   const Engine = {
     _ctx: null,
     master: null,
@@ -72,6 +90,14 @@
       return Promise.resolve(ctx);
     },
 
+    // Synchronous, fire-and-forget resume for the hot trigger path — lets a pad
+    // hit schedule audio immediately without waiting on a promise.
+    resumeIfNeeded() {
+      const ctx = this.getContext();
+      if (ctx.state === 'suspended') { const p = ctx.resume(); if (p && p.catch) p.catch(() => {}); }
+      return ctx;
+    },
+
     now() { return this.getContext().currentTime; },
 
     decode(arrayBuffer) {
@@ -86,17 +112,17 @@
     _buildGraph() {
       const ctx = this._ctx;
 
-      // Master: gain -> gentle limiter -> destination
+      // Master: gain -> soft-clip -> destination.
+      // A WaveShaper soft-clipper tames peaks with ZERO added latency, unlike a
+      // DynamicsCompressor (which adds ~6 ms look-ahead) — important so live pad
+      // hits feel immediate.
       const masterGain = ctx.createGain();
       masterGain.gain.value = 0.9;
-      const limiter = ctx.createDynamicsCompressor();
-      limiter.threshold.value = -1.5;
-      limiter.knee.value = 0;
-      limiter.ratio.value = 20;
-      limiter.attack.value = 0.003;
-      limiter.release.value = 0.12;
-      masterGain.connect(limiter);
-      limiter.connect(ctx.destination);
+      const clipper = ctx.createWaveShaper();
+      clipper.curve = makeSoftClipCurve();
+      clipper.oversample = 'none'; // 'none' keeps latency at zero
+      masterGain.connect(clipper);
+      clipper.connect(ctx.destination);
       this.master = {
         input: masterGain,
         setVolume: (v) => { masterGain.gain.value = clamp(v, 0, 1.5); },
@@ -159,10 +185,13 @@
 
       const env = ctx.createGain();
       const peak = clamp(velocity, 0, 1);
-      const fade = Math.min(0.006, playDur / 2);
+      // Very short attack for a punchy transient; a slightly longer release
+      // avoids an end click when the trim cuts mid-waveform.
+      const fadeIn = Math.min(0.0015, playDur * 0.5);
+      const fadeOut = Math.min(0.005, playDur * 0.5);
       env.gain.setValueAtTime(0, when);
-      env.gain.linearRampToValueAtTime(peak, when + fade);
-      env.gain.setValueAtTime(peak, Math.max(when + fade, when + playDur - fade));
+      env.gain.linearRampToValueAtTime(peak, when + fadeIn);
+      env.gain.setValueAtTime(peak, Math.max(when + fadeIn, when + playDur - fadeOut));
       env.gain.linearRampToValueAtTime(0, when + playDur);
 
       src.connect(env);
