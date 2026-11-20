@@ -431,3 +431,4 @@ input[type="range"]::-moz-range-thumb {
 .syn-loop-name { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
 .syn-mini-roll { width: 100%; height: 56px; display: block; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
 .toggle:disabled, .syn-select:disabled { opacity: 0.45; cursor: default; }
+[hidden] { display: none !important; }

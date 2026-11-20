@@ -210,7 +210,9 @@
     const g = canvas.getContext('2d');
     g.setTransform(dpr, 0, 0, dpr, 0, 0);
     g.clearRect(0, 0, w, h);
-    const take = Synth.take;
+    // After a free jam (and no take yet), the roll shows the jam in free time.
+    const showJam = !Synth._previewLoop && ((Synth.recording && Synth.jamMode) || (!Synth.recording && !Synth.take.notes.length && Synth.jam));
+    const take = showJam && !Synth.recording ? { notes: Synth.jam.notes, lengthSec: Synth.jam.durationSec, bpm: 60, beatsPerBar: 4 } : Synth.take;
     const t = Synth.tempo();
     const bpm = take.notes.length ? take.bpm : t.bpm;
     const bpb = take.notes.length ? take.beatsPerBar : t.beatsPerBar;
@@ -221,8 +223,15 @@
     if (Synth.recording && pos != null) length = Math.max(length, Math.ceil(Math.max(pos, 0.001) / barLen) * barLen);
     const pxs = w / length;
 
-    // grid
-    for (let b = 0, x; (x = b * spb * pxs) <= w + 1; b++) {
+    // grid (seconds when showing a free jam, beats/bars otherwise)
+    if (showJam) {
+      for (let sec = 0, x; (x = sec * pxs) <= w + 1; sec++) {
+        g.fillStyle = sec % 5 === 0 ? 'rgba(255,255,255,0.14)' : 'rgba(255,255,255,0.04)';
+        g.fillRect(Math.round(x), 0, 1, h);
+        if (sec % 5 === 0) { g.fillStyle = 'rgba(139,150,173,0.9)'; g.font = '10px monospace'; g.fillText(MPC.util.formatTime(sec), Math.round(x) + 3, 11); }
+      }
+    }
+    for (let b = 0, x; !showJam && (x = b * spb * pxs) <= w + 1; b++) {
       g.fillStyle = b % bpb === 0 ? 'rgba(255,255,255,0.16)' : 'rgba(255,255,255,0.05)';
       g.fillRect(Math.round(x), 0, 1, h);
       if (b % bpb === 0) {
@@ -232,7 +241,7 @@
       }
     }
 
-    const notes = take.notes.concat(Synth.recording ? Synth._recNew.map((n) => ({
+    const notes = (Synth.recording && Synth.jamMode ? [] : take.notes).concat(Synth.recording ? Synth._recNew.map((n) => ({
       midi: n.midi, start: Math.max(0, n.start), end: n.end != null ? n.end : (pos || 0), live: true,
     })) : []);
     if (!notes.length) {
@@ -264,7 +273,9 @@
     const info = qs('#syn-take-info');
     if (info) {
       const bars = take.lengthSec ? Math.round(take.lengthSec / barLen) : 0;
-      info.textContent = take.notes.length
+      info.textContent = showJam && Synth.jam && !Synth.recording
+        ? 'last jam · ' + Synth.jam.notes.length + ' notes · ' + MPC.util.formatTime(Synth.jam.durationSec)
+        : take.notes.length
         ? take.notes.length + ' notes · ' + bars + ' bar' + (bars === 1 ? '' : 's') + ' · ' + Math.round(take.bpm) + ' BPM'
         : 'empty';
     }
@@ -676,8 +687,11 @@
       jamPanel.hidden = !j;
       if (!j) return;
       jamInfo.textContent = j.notes.length + ' notes · ' + MPC.util.formatTime(j.durationSec);
-      jamStatus.textContent = 'Press “Find loops” to pull loops out of this jam.';
       loopList.innerHTML = '';
+      drawRoll();
+      jamPanel.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+      // Go straight on to finding the loops.
+      analyze(true);
     });
 
     const exportBox = el('div', { class: 'syn-export' }, [

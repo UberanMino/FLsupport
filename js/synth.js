@@ -224,7 +224,7 @@
         this.loops = [];
         MPC.bus.emit('synth:jam');
         MPC.bus.emit('synth:state');
-        MPC.toast('Jam recorded: ' + notes.length + ' notes, ' + MPC.util.formatTime(this.jam.durationSec) + '.');
+        MPC.toast('Jam kept (' + notes.length + ' notes). Finding loops…');
         return;
       }
 
