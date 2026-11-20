@@ -18,10 +18,10 @@ There are two ways to run the exact same app:
 - **Standalone build** (this repo) — full features **including WAV/ZIP stem
   export**. Open it directly or serve it (below).
 - **Live in-session build** — a single-file version published as a claude.ai
-  Artifact so you can jam right in the chat. Everything works there *except*
-  audio-file downloads (the Artifact sandbox blocks `.wav`/`.zip`). To get stems
-  out, use **⬇ Project file** to download a portable `.json` (your sounds are
-  embedded), then open the standalone build, **⬆ Load file**, and **Export ZIP**.
+  Artifact so you can play it right in the chat. Everything works there too;
+  the only difference is that the Artifact viewer can't save `.wav` files, so a
+  single WAV export arrives as a `.zip` with the WAV inside (stem export is a
+  ZIP anyway). Click into the page once before typing so it gets the keyboard.
   Rebuild the single file any time with `node tools/build-artifact.js`.
 
 **Option A — open the file.** Double-click `index.html` (or drag it into a
@@ -57,8 +57,65 @@ then open <http://localhost:8000>.
   ```
 - Click a pad to open it in the **pad editor** below the grid.
 
-The workspace has two tabs: **🥁 MPC** (pads + pad mixer) and **🎚 Playlist**
-(the timeline grid). Finishing a recording jumps you to the Playlist.
+The workspace has three tabs: **🥁 MPC** (pads + pad mixer), **🎚 Playlist**
+(the timeline grid) and **🎹 Synth** (a synth sample creator, see below). Finishing a recording jumps you to the Playlist.
+
+### 🎹 Synth — sample creator
+A small subtractive polysynth you play with the computer keyboard, FL Studio
+"typing keyboard" style:
+
+```
+ 2 3   5 6 7   9 0   =        ← top row: one octave higher
+Q W E R T Y U I O P [ ]
+ S D   G H J   L ;
+Z X C V B N M , . /          ← bottom row: starts at C of the current octave
+```
+
+- Keys are matched by **physical position**, so it works the same on a German
+  QWERTZ keyboard (the key labelled `Y` bottom-left plays C). In Chromium-based
+  browsers the on-screen piano shows your real key caps.
+- `↑` / `↓` octave, `Enter` record, `Space` play/stop the take, `Esc` all notes off.
+  You can also click/touch the on-screen piano.
+- **Sound**: 2 oscillators (sine/triangle/saw/square, octave, semitone, detune,
+  level), unison (up to 7 voices with stereo spread), low/high/band-pass filter
+  with its own ADSR, amp ADSR, an LFO for pitch/filter wobble (vibrato or tape
+  warble), noise, drive, delay and reverb. Save your own presets (stored in
+  this browser).
+- **Presets**: 8 basics plus a 12-preset **Trip Hop Kit** for atmospheric hip
+  hop / psychedelic trip hop: Dusty Keys, Tape Warble Pad, Haze Drone, Smoky
+  Sub, Mellow Bass, Psych Lead, Ghost Theremin, Breathy Flute, Lo-fi Strings,
+  Dream Bell, Echo Pluck and Space Sweep.
+- **Record a melody**: `● Rec` (optional one-bar count-in and click at the
+  project BPM), play, stop. Note starts are quantized (Off … 1/32). **Overdub**
+  adds to the take instead of replacing it; Undo note, transpose ±1 and Clear
+  edit it. The take is shown in a mini piano roll and saved with the project.
+- **🌀 Jam → loops**: switch on **Jam** and press Rec to play freely, with no
+  click, count-in or tempo, for as long as you like. When you stop, **Find
+  loops** picks up to 3 loopable passages. In the claude.ai version the notes
+  go to Claude, which works out each loop's own tempo (so tempo changes during
+  the jam are fine), works out which beat each note was aiming for and drops
+  stray notes. Loops stay **human**: your own timing and note lengths are kept,
+  and the **Tightness** slider (also used by the normal recorder's quantize)
+  only nudges notes that are clearly off the beat — 0 = exactly as played,
+  100% = fully on the grid. Elsewhere (or with **Quick find**) a built-in loop
+  finder does it instead: it estimates the tempo and looks for phrases you
+  repeated. Each loop can be previewed, loaded as the take, downloaded as a
+  ZIP with a **seamless WAV + MIDI file**, or saved to Drive. The WAV is
+  rendered as the middle of three passes, so release and delay/reverb tails
+  from the end carry over into the start and it loops without a click.
+- **Export**: render the melody (starting at bar 1 for grid alignment, or
+  trimmed to the first note) or a single **one-shot** note to a 44.1 kHz WAV
+  (24- or 16-bit, optional normalize to −0.3 dBFS). Rendering happens offline,
+  so it is sample-accurate and includes the delay/reverb tail.
+- **→ Load onto MPC pad** puts the rendered sound straight onto the selected
+  pad, so you can chop it or play it in the MPC tab.
+- **☁ Save to Drive** (claude.ai version only) uploads the rendered WAV into a
+  Google Drive folder you name (default `FL Studio Samples`, created in My
+  Drive if missing), using your Google Drive connector. If the view can only
+  send small files, a 24-bit file that is too big is sent as 16-bit instead.
+
+> Note names here use MIDI 60 = C4. As far as I know FL Studio labels the same
+> note C5, so a sample named `…_C4.wav` is FL's C5.
 
 ### 🎚 Per-pad mixing
 Select a pad to adjust:
@@ -146,7 +203,13 @@ Vanilla JS modules under `js/` (no dependencies), styled by `styles/main.css`:
 | `transport.js` | clock, lookahead scheduler, metronome |
 | `sequencer.js` | recording, quantize, loop & clip-timeline scheduling |
 | `render.js` | offline rendering → stems / sections / master + clip waveforms |
+| `synth-engine.js` | synth voices, FX bus, presets, offline synth rendering |
+| `synth.js` | synth playing, take recording/playback, export, persistence |
+| `loop-finder.js` | rule-based tempo estimate + loop picking for free jams |
+| `jam-analyzer.js` | sends a jam to Claude (Artifact `sample` capability) to pick loops; falls back to loop-finder |
+| `midi.js` | Standard MIDI File writer for loops |
+| `drive.js` | save WAVs to a Google Drive folder (Artifact build, via the `mcp` capability) |
 | `host-bridge.js` | file saving (browser download or Artifact `downloads`) |
 | `app.js` | central state + actions |
-| `ui-*.js` | pads, mixer, transport, tabs, playlist grid, library, bootstrap |
+| `ui-*.js` | pads, mixer, transport, tabs, playlist grid, library, synth tab, bootstrap |
 | `tools/build-artifact.js` | inline everything into one self-contained page |

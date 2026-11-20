@@ -449,6 +449,7 @@
           id: c.id, sectionId: c.sectionId, lane: c.lane,
           startBar: c.startBar, lenBars: c.lenBars, srcOffsetSec: c.srcOffsetSec,
         })),
+        synth: MPC.synth ? MPC.synth.serialize() : null,
       };
     },
 
@@ -496,6 +497,8 @@
       this.applyTransportSettings();
       if (engine.master) engine.master.setVolume(s.masterVolume);
       await this.applyPadRecords(project.pads || []);
+      if (MPC.synth && project.synth) MPC.synth.applySerialized(project.synth);
+      else if (MPC.synth) MPC.synth.clearTake();
       s.dirty = false;
       MPC.bus.emit('settings:changed');
       MPC.bus.emit('sections:changed');
@@ -567,6 +570,7 @@
       s.clips = [];
       s.selectedSectionId = null;
       s.selectedClipId = null;
+      if (MPC.synth) MPC.synth.clearTake();
       s.dirty = false;
       MPC.bus.emit('sections:changed');
       MPC.bus.emit('clips:changed');

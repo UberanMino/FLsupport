@@ -15,8 +15,8 @@ const OUT = process.argv[2] || path.join(ROOT, 'dist', 'mpc-studio.artifact.html
 
 const JS_ORDER = [
   'core', 'storage', 'export-encoders', 'sample', 'audio-engine', 'models',
-  'transport', 'sequencer', 'render', 'host-bridge', 'app',
-  'ui-pads', 'ui-mixer', 'ui-transport', 'ui-tabs', 'ui-playlist', 'ui-library', 'ui-main',
+  'transport', 'sequencer', 'render', 'synth-engine', 'host-bridge', 'app', 'synth', 'drive', 'loop-finder', 'midi', 'jam-analyzer',
+  'ui-pads', 'ui-mixer', 'ui-transport', 'ui-tabs', 'ui-playlist', 'ui-library', 'ui-synth', 'ui-main',
 ];
 
 const html = fs.readFileSync(path.join(ROOT, 'index.html'), 'utf8');
@@ -31,6 +31,7 @@ const js = JS_ORDER
   .join('\n\n');
 
 const out = [
+  '<title>MPC Studio</title>',
   '<style>', css, '</style>', '',
   markup, '',
   '<script>', js, '</script>', '',
