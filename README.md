@@ -95,6 +95,10 @@ Z X C V B N M , . /          ← bottom row: starts at C of the current octave
   so it is sample-accurate and includes the delay/reverb tail.
 - **→ Load onto MPC pad** puts the rendered sound straight onto the selected
   pad, so you can chop it or play it in the MPC tab.
+- **☁ Save to Drive** (claude.ai version only) uploads the rendered WAV into a
+  Google Drive folder you name (default `FL Studio Samples`, created in My
+  Drive if missing), using your Google Drive connector. If the view can only
+  send small files, a 24-bit file that is too big is sent as 16-bit instead.
 
 > Note names here use MIDI 60 = C4. As far as I know FL Studio labels the same
 > note C5, so a sample named `…_C4.wav` is FL's C5.
@@ -187,6 +191,7 @@ Vanilla JS modules under `js/` (no dependencies), styled by `styles/main.css`:
 | `render.js` | offline rendering → stems / sections / master + clip waveforms |
 | `synth-engine.js` | synth voices, FX bus, presets, offline synth rendering |
 | `synth.js` | synth playing, take recording/playback, export, persistence |
+| `drive.js` | save WAVs to a Google Drive folder (Artifact build, via the `mcp` capability) |
 | `host-bridge.js` | file saving (browser download or Artifact `downloads`) |
 | `app.js` | central state + actions |
 | `ui-*.js` | pads, mixer, transport, tabs, playlist grid, library, synth tab, bootstrap |

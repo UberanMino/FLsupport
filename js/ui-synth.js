@@ -497,21 +497,63 @@
     updatePadButtons();
     MPC.bus.on('pad:selected', updatePadButtons);
 
+    // --- Google Drive (claude.ai build only; hidden until the connector bridge answers)
+    const driveFolder = el('input', { id: 'syn-drive-folder', class: 'syn-text', type: 'text', value: MPC.drive.folderName(), title: 'Drive folder name (created in My Drive if missing)' });
+    driveFolder.addEventListener('change', () => { const v = driveFolder.value.trim(); if (v) MPC.drive.setFolderName(v); else driveFolder.value = MPC.drive.folderName(); });
+    const driveStatus = el('p', { class: 'syn-note syn-drive-status', 'aria-live': 'polite' });
+    const toDrive = (btn, render, filename) => busy(btn, async () => {
+      const folder = driveFolder.value.trim() || MPC.drive.folderName();
+      driveStatus.textContent = 'Uploading ' + filename() + ' to “' + folder + '”…';
+      try {
+        const buf = await render();
+        let depth = parseInt(bits.value, 10);
+        let blob = MPC.encoders.encodeWav(buf, depth);
+        // If this view can't send a file this big, 16-bit halves it.
+        if (depth === 24 && blob.size > await MPC.drive.maxBytes()) { depth = 16; blob = MPC.encoders.encodeWav(buf, 16); }
+        const name = filename();
+        const res = await MPC.drive.saveWav(blob, name, folder);
+        driveStatus.textContent = 'Saved ' + name + (depth !== parseInt(bits.value, 10) ? ' (as 16-bit to fit the upload limit)' : '') + ' to “' + folder + '”. ';
+        if (res.url) driveStatus.appendChild(el('a', { href: res.url, target: '_blank', rel: 'noopener', text: 'Open in Drive' }));
+        MPC.toast('Saved to Google Drive');
+      } catch (err) {
+        driveStatus.textContent = err.message || String(err);
+        throw err;
+      }
+    });
+    const takeToDrive = el('button', { class: 'mini syn-drive', text: '☁ Save to Drive', hidden: 'hidden' });
+    takeToDrive.addEventListener('click', () => toDrive(takeToDrive,
+      () => Synth.renderTake({ startAt: startAt.value, normalize: normCb.checked }), () => Synth.takeFilename()));
+    const shotToDrive = el('button', { class: 'mini syn-drive', text: '☁ Save to Drive', hidden: 'hidden' });
+    shotToDrive.addEventListener('click', () => toDrive(shotToDrive,
+      () => Synth.renderOneShot(parseInt(noteSel.value, 10), parseFloat(hold.value), { normalize: normCb.checked, velocity: Synth.velocity }),
+      () => Synth.oneShotFilename(parseInt(noteSel.value, 10))));
+    const driveCard = card('Google Drive', [
+      el('label', { class: 'syn-field', for: 'syn-drive-folder' }, [el('span', { class: 'pl-label', text: 'Folder' }), driveFolder]),
+      el('p', { class: 'syn-note', text: '“☁ Save to Drive” uploads the WAV into this folder in My Drive. The folder is created if it doesn’t exist.' }),
+      driveStatus,
+    ]);
+    driveCard.hidden = true;
+    MPC.drive.available().then((ok) => {
+      if (!ok) return;
+      driveCard.hidden = false; takeToDrive.hidden = false; shotToDrive.hidden = false;
+    });
+
     const exportBox = el('div', { class: 'syn-export' }, [
       card('Export melody', [
         el('div', { class: 'syn-group' }, [el('span', { class: 'pl-label', text: 'Start at' }), startAt]),
-        el('div', { class: 'syn-group' }, [expTake, takeToPad]),
+        el('div', { class: 'syn-group' }, [expTake, takeToPad, takeToDrive]),
       ]),
       card('Export one-shot', [
         el('div', { class: 'syn-group' }, [el('span', { class: 'pl-label', text: 'Note' }), noteSel]),
         el('div', { class: 'slider' }, [el('div', { class: 'sl-top' }, [el('label', { text: 'Hold' }), holdVal]), hold]),
-        el('div', { class: 'syn-group' }, [expShot, shotToPad]),
+        el('div', { class: 'syn-group' }, [expShot, shotToPad, shotToDrive]),
       ]),
       card('Format', [
         el('div', { class: 'syn-group' }, [bits]),
         el('label', { class: 'checkbox' }, [normCb, ' Normalize to −0.3 dBFS']),
         el('p', { class: 'syn-note', text: '44.1 kHz stereo WAV. Effect tails are included and trailing silence is trimmed.' }),
       ]),
+      driveCard,
     ]);
 
     host.appendChild(head);
