@@ -3,10 +3,9 @@
  *
  * Standalone (opened directly / served): a normal browser download.
  * Inside a claude.ai Artifact: the sandbox blocks page-initiated downloads, so
- * route through the `downloads` runtime capability. That capability only allows
- * a fixed set of extensions (json/txt/png/… — NOT wav or zip), so audio/ZIP
- * export is a standalone-only feature; the portable project file is .json and
- * works everywhere.
+ * route through the `downloads` runtime capability. That capability allows a
+ * fixed set of extensions that includes .zip and .json but not .wav, so single
+ * WAV exports are wrapped in a ZIP there.
  */
 (function () {
   'use strict';
@@ -38,6 +37,13 @@
         MPC.util.download(blob, filename);
         return true;
       }
+      // The Artifact viewer won't save .wav files but does allow .zip, so a
+      // single WAV is wrapped in a ZIP (stored, uncompressed) there.
+      if (/\.wav$/i.test(filename)) {
+        const bytes = new Uint8Array(await ((data instanceof Blob) ? data.arrayBuffer() : new Blob([data]).arrayBuffer()));
+        data = MPC.encoders.zip([{ name: filename, bytes }]);
+        filename = filename.replace(/\.wav$/i, '.zip');
+      }
       const dl = await downloadsNs();
       if (!dl) {
         MPC.toast('Saving files isn’t available in this view.', 'error');
@@ -51,7 +57,7 @@
         if (code === 'declined') { /* viewer cancelled — no noise */ }
         else if (code === 'rejected_extension' || code === 'extension_not_enabled') {
           const ext = (filename.split('.').pop() || '').toUpperCase();
-          MPC.toast('This in-session view can’t download ' + ext + ' files. Use “Save project file” (.json), then export WAV stems from the standalone build.', 'error');
+          MPC.toast('This view can’t download ' + ext + ' files. Save the project file (.json) and export from the standalone build.', 'error');
         } else if (code === 'too_large') {
           MPC.toast('That file is over the 16 MB download limit for this view.', 'error');
         } else {

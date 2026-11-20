@@ -31,6 +31,7 @@ const js = JS_ORDER
   .join('\n\n');
 
 const out = [
+  '<title>MPC Studio</title>',
   '<style>', css, '</style>', '',
   markup, '',
   '<script>', js, '</script>', '',

@@ -18,10 +18,10 @@ There are two ways to run the exact same app:
 - **Standalone build** (this repo) — full features **including WAV/ZIP stem
   export**. Open it directly or serve it (below).
 - **Live in-session build** — a single-file version published as a claude.ai
-  Artifact so you can jam right in the chat. Everything works there *except*
-  audio-file downloads (the Artifact sandbox blocks `.wav`/`.zip`). To get stems
-  out, use **⬇ Project file** to download a portable `.json` (your sounds are
-  embedded), then open the standalone build, **⬆ Load file**, and **Export ZIP**.
+  Artifact so you can play it right in the chat. Everything works there too;
+  the only difference is that the Artifact viewer can't save `.wav` files, so a
+  single WAV export arrives as a `.zip` with the WAV inside (stem export is a
+  ZIP anyway). Click into the page once before typing so it gets the keyboard.
   Rebuild the single file any time with `node tools/build-artifact.js`.
 
 **Option A — open the file.** Double-click `index.html` (or drag it into a
