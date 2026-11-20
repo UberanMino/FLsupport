@@ -53,6 +53,7 @@
     MPC.uiTabs.init();
     MPC.uiPlaylist.init();
     MPC.uiLibrary.init();
+    MPC.uiSynth.init();
 
     // Warn about unsaved work.
     window.addEventListener('beforeunload', (e) => {

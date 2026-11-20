@@ -119,6 +119,7 @@
         <div id="tab-bar" role="tablist">
           <button class="tab active" data-tab="mpc" role="tab">🥁 MPC</button>
           <button class="tab" data-tab="playlist" role="tab">🎚 Playlist</button>
+          <button class="tab" data-tab="synth" role="tab">🎹 Synth</button>
         </div>
         <div id="tab-body">
           <!-- MPC tab -->
@@ -162,6 +163,9 @@
             <div id="pl-scroll"><div id="pl-grid"></div></div>
             <div id="section-editor" class="section-editor"></div>
           </section>
+
+          <!-- Synth tab (built by js/ui-synth.js) -->
+          <section id="tab-synth" class="tab-panel panel"></section>
         </div>
       </section>
     </main>
@@ -180,14 +184,17 @@
   <script src="js/transport.js"></script>
   <script src="js/sequencer.js"></script>
   <script src="js/render.js"></script>
+  <script src="js/synth-engine.js"></script>
   <script src="js/host-bridge.js"></script>
   <script src="js/app.js"></script>
+  <script src="js/synth.js"></script>
   <script src="js/ui-pads.js"></script>
   <script src="js/ui-mixer.js"></script>
   <script src="js/ui-transport.js"></script>
   <script src="js/ui-tabs.js"></script>
   <script src="js/ui-playlist.js"></script>
   <script src="js/ui-library.js"></script>
+  <script src="js/ui-synth.js"></script>
   <script src="js/ui-main.js"></script>
 </body>
 </html>

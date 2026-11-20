@@ -109,6 +109,8 @@
       // Keyboard.
       window.addEventListener('keydown', (e) => {
         if (isTypingTarget(e.target)) return;
+        // The Synth tab uses the keyboard as a piano; it handles keys itself.
+        if (MPC.uiSynth && MPC.uiSynth.isActive()) return;
         const key = e.key.toLowerCase();
         if (key === ' ') { e.preventDefault(); App.stopEverything(); return; }
         const padIndex = MPC.const.KEY_TO_PAD[key];

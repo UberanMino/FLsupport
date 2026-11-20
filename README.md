@@ -57,8 +57,42 @@ then open <http://localhost:8000>.
   ```
 - Click a pad to open it in the **pad editor** below the grid.
 
-The workspace has two tabs: **🥁 MPC** (pads + pad mixer) and **🎚 Playlist**
-(the timeline grid). Finishing a recording jumps you to the Playlist.
+The workspace has three tabs: **🥁 MPC** (pads + pad mixer), **🎚 Playlist**
+(the timeline grid) and **🎹 Synth** (a synth sample creator, see below). Finishing a recording jumps you to the Playlist.
+
+### 🎹 Synth — sample creator
+A small subtractive polysynth you play with the computer keyboard, FL Studio
+"typing keyboard" style:
+
+```
+ 2 3   5 6 7   9 0   =        ← top row: one octave higher
+Q W E R T Y U I O P [ ]
+ S D   G H J   L ;
+Z X C V B N M , . /          ← bottom row: starts at C of the current octave
+```
+
+- Keys are matched by **physical position**, so it works the same on a German
+  QWERTZ keyboard (the key labelled `Y` bottom-left plays C). In Chromium-based
+  browsers the on-screen piano shows your real key caps.
+- `↑` / `↓` octave, `Enter` record, `Space` play/stop the take, `Esc` all notes off.
+  You can also click/touch the on-screen piano.
+- **Sound**: 2 oscillators (sine/triangle/saw/square, octave, semitone, detune,
+  level), unison (up to 7 voices with stereo spread), low/high/band-pass filter
+  with its own ADSR, amp ADSR, delay and reverb. 8 factory presets; save your
+  own presets (stored in this browser).
+- **Record a melody**: `● Rec` (optional one-bar count-in and click at the
+  project BPM), play, stop. Note starts are quantized (Off … 1/32). **Overdub**
+  adds to the take instead of replacing it; Undo note, transpose ±1 and Clear
+  edit it. The take is shown in a mini piano roll and saved with the project.
+- **Export**: render the melody (starting at bar 1 for grid alignment, or
+  trimmed to the first note) or a single **one-shot** note to a 44.1 kHz WAV
+  (24- or 16-bit, optional normalize to −0.3 dBFS). Rendering happens offline,
+  so it is sample-accurate and includes the delay/reverb tail.
+- **→ Load onto MPC pad** puts the rendered sound straight onto the selected
+  pad, so you can chop it or play it in the MPC tab.
+
+> Note names here use MIDI 60 = C4. As far as I know FL Studio labels the same
+> note C5, so a sample named `…_C4.wav` is FL's C5.
 
 ### 🎚 Per-pad mixing
 Select a pad to adjust:
@@ -146,7 +180,9 @@ Vanilla JS modules under `js/` (no dependencies), styled by `styles/main.css`:
 | `transport.js` | clock, lookahead scheduler, metronome |
 | `sequencer.js` | recording, quantize, loop & clip-timeline scheduling |
 | `render.js` | offline rendering → stems / sections / master + clip waveforms |
+| `synth-engine.js` | synth voices, FX bus, presets, offline synth rendering |
+| `synth.js` | synth playing, take recording/playback, export, persistence |
 | `host-bridge.js` | file saving (browser download or Artifact `downloads`) |
 | `app.js` | central state + actions |
-| `ui-*.js` | pads, mixer, transport, tabs, playlist grid, library, bootstrap |
+| `ui-*.js` | pads, mixer, transport, tabs, playlist grid, library, synth tab, bootstrap |
 | `tools/build-artifact.js` | inline everything into one self-contained page |
