@@ -76,6 +76,7 @@
       const p = MPC.util.clone(this.patch);
       p.name = name;
       p.user = true;
+      delete p.category;
       this.userPresets = this.userPresets.filter((u) => u.name !== name).concat([p]);
       lsSet(LS_PRESETS, this.userPresets);
       this.patch.name = name;

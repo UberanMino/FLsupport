@@ -28,8 +28,12 @@
       filter: { type: 'lowpass', cutoff: 2400, q: 2, envAmt: 2.5 }, // envAmt in octaves
       ampEnv: { a: 0.005, d: 0.25, s: 0.7, r: 0.25 },
       filterEnv: { a: 0.005, d: 0.3, s: 0.3, r: 0.3 },
+      lfo: { wave: 'sine', rate: 5, pitch: 0, filter: 0 },  // pitch in cents, filter in octaves
+      noise: 0,            // white-noise level mixed into the filter
+      drive: 0,            // soft saturation on the synth bus (0..1)
       fx: { delayMix: 0, delayTime: 0.375, delayFb: 0.35, reverbMix: 0.15, reverbSize: 1.8 },
       volume: 0.7,
+      category: 'Basics',
     };
   }
 
@@ -69,7 +73,7 @@
     preset('Reese Bass', {
       osc1: { wave: 'sawtooth', octave: -1, level: 0.7 }, osc2: { wave: 'sawtooth', octave: -1, detune: 14, level: 0.7 },
       filter: { cutoff: 450, q: 3, envAmt: 1.2 }, ampEnv: { a: 0.005, d: 0.4, s: 0.9, r: 0.15 },
-      fx: { reverbMix: 0.05, delayMix: 0 },
+      fx: { reverbMix: 0.05, delayMix: 0 }, volume: 0.55,
     }),
     preset('Bell', {
       osc1: { wave: 'sine', level: 0.8 }, osc2: { wave: 'sine', octave: 2, semi: 7, detune: 0, level: 0.3 },
@@ -81,6 +85,96 @@
       filter: { cutoff: 9000, q: 0.5, envAmt: 0 }, ampEnv: { a: 0.001, d: 0.1, s: 0.6, r: 0.06 },
       fx: { reverbMix: 0.08, delayMix: 0 },
     }),
+
+    /* ---- Trip Hop kit: atmospheric hip hop / psychedelic trip hop ---- */
+    preset('Dusty Keys', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sine', level: 0.85 }, osc2: { wave: 'triangle', octave: 1, detune: 4, level: 0.22 },
+      filter: { cutoff: 1800, q: 0.7, envAmt: 1.2 }, ampEnv: { a: 0.004, d: 1.4, s: 0.25, r: 0.5 },
+      filterEnv: { a: 0.002, d: 0.6, s: 0.2, r: 0.4 }, lfo: { rate: 0.6, pitch: 7 }, noise: 0.03, drive: 0.25,
+      fx: { reverbMix: 0.25, reverbSize: 2.2, delayMix: 0 }, volume: 0.6,
+    }),
+    preset('Tape Warble Pad', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sawtooth', level: 0.55 }, osc2: { wave: 'triangle', octave: -1, detune: 6, level: 0.45 },
+      unison: 3, spread: 16, filter: { cutoff: 650, q: 1.5, envAmt: 1.2 },
+      ampEnv: { a: 0.9, d: 1.5, s: 0.85, r: 2.2 }, filterEnv: { a: 1.4, d: 2, s: 0.6, r: 2 },
+      lfo: { rate: 0.45, pitch: 14, filter: 0.3 }, noise: 0.05, drive: 0.2,
+      fx: { reverbMix: 0.5, reverbSize: 4.5, delayMix: 0.12, delayTime: 0.5, delayFb: 0.4 },
+    }),
+    preset('Haze Drone', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sawtooth', octave: -1, level: 0.5 }, osc2: { wave: 'sawtooth', octave: 0, semi: 7, detune: -8, level: 0.35 },
+      unison: 5, spread: 22, filter: { type: 'lowpass', cutoff: 420, q: 4, envAmt: 0.6 },
+      ampEnv: { a: 2.2, d: 2, s: 0.9, r: 3.5 }, filterEnv: { a: 3, d: 3, s: 0.7, r: 3 },
+      lfo: { wave: 'triangle', rate: 0.12, pitch: 4, filter: 1.4 }, noise: 0.12, drive: 0.3,
+      fx: { reverbMix: 0.6, reverbSize: 6, delayMix: 0.15, delayTime: 0.75, delayFb: 0.5 },
+    }),
+    preset('Smoky Sub', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sine', octave: -1, level: 0.95 }, osc2: { wave: 'triangle', octave: 0, detune: 0, level: 0.12 },
+      filter: { cutoff: 380, q: 0.8, envAmt: 0.8 }, ampEnv: { a: 0.006, d: 0.8, s: 0.7, r: 0.25 },
+      filterEnv: { a: 0.002, d: 0.25, s: 0.1, r: 0.2 }, drive: 0.45,
+      fx: { reverbMix: 0, delayMix: 0 }, volume: 0.85,
+    }),
+    preset('Mellow Bass', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'triangle', octave: -1, level: 0.85 }, osc2: { wave: 'sawtooth', octave: -1, detune: 5, level: 0.3 },
+      filter: { cutoff: 260, q: 2.5, envAmt: 2.2 }, ampEnv: { a: 0.004, d: 0.6, s: 0.45, r: 0.18 },
+      filterEnv: { a: 0.002, d: 0.22, s: 0.05, r: 0.15 }, drive: 0.35,
+      fx: { reverbMix: 0.06, delayMix: 0 }, volume: 0.8,
+    }),
+    preset('Psych Lead', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'square', level: 0.55 }, osc2: { wave: 'sawtooth', octave: 0, detune: 9, level: 0.35 },
+      filter: { cutoff: 1500, q: 6, envAmt: 2 }, ampEnv: { a: 0.02, d: 0.5, s: 0.7, r: 0.4 },
+      filterEnv: { a: 0.08, d: 0.7, s: 0.4, r: 0.4 }, lfo: { rate: 5.5, pitch: 22, filter: 0.2 }, drive: 0.4,
+      fx: { delayMix: 0.35, delayTime: 0.42, delayFb: 0.55, reverbMix: 0.3, reverbSize: 3 }, volume: 0.5,
+    }),
+    preset('Ghost Theremin', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sine', level: 0.9 }, osc2: { wave: 'triangle', octave: 1, detune: 0, level: 0.08 },
+      filter: { cutoff: 3000, q: 0.5, envAmt: 0 }, ampEnv: { a: 0.35, d: 0.5, s: 0.9, r: 0.9 },
+      lfo: { rate: 6, pitch: 35 },
+      fx: { reverbMix: 0.45, reverbSize: 4, delayMix: 0.2, delayTime: 0.6, delayFb: 0.45 },
+    }),
+    preset('Breathy Flute', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'triangle', level: 0.75 }, osc2: { wave: 'sine', octave: 1, detune: 0, level: 0.15 },
+      filter: { cutoff: 2200, q: 1, envAmt: 0.8 }, ampEnv: { a: 0.12, d: 0.4, s: 0.8, r: 0.35 },
+      filterEnv: { a: 0.1, d: 0.5, s: 0.6, r: 0.3 }, lfo: { rate: 4.8, pitch: 10 }, noise: 0.22,
+      fx: { reverbMix: 0.35, reverbSize: 2.8, delayMix: 0.1, delayTime: 0.4 },
+    }),
+    preset('Lo-fi Strings', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sawtooth', level: 0.6 }, osc2: { wave: 'sawtooth', octave: 1, detune: -6, level: 0.25 },
+      unison: 5, spread: 14, filter: { cutoff: 1400, q: 0.8, envAmt: 0.6 },
+      ampEnv: { a: 0.45, d: 1, s: 0.85, r: 1.1 }, filterEnv: { a: 0.6, d: 1, s: 0.7, r: 1 },
+      lfo: { rate: 0.7, pitch: 9 }, noise: 0.04, drive: 0.15,
+      fx: { reverbMix: 0.4, reverbSize: 3.5 },
+    }),
+    preset('Dream Bell', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sine', level: 0.8 }, osc2: { wave: 'sine', octave: 2, semi: 0, detune: 6, level: 0.28 },
+      filter: { cutoff: 5000, q: 0.5, envAmt: 0 }, ampEnv: { a: 0.002, d: 2.2, s: 0, r: 1.8 },
+      lfo: { rate: 0.5, pitch: 6 },
+      fx: { reverbMix: 0.5, reverbSize: 5, delayMix: 0.3, delayTime: 0.5, delayFb: 0.5 },
+    }),
+    preset('Echo Pluck', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'square', level: 0.6 }, osc2: { wave: 'triangle', octave: 1, detune: 3, level: 0.3 },
+      filter: { cutoff: 500, q: 5, envAmt: 3.5 }, ampEnv: { a: 0.002, d: 0.3, s: 0, r: 0.25 },
+      filterEnv: { a: 0.001, d: 0.15, s: 0, r: 0.15 }, drive: 0.2,
+      fx: { delayMix: 0.45, delayTime: 0.375, delayFb: 0.6, reverbMix: 0.3, reverbSize: 3 },
+    }),
+    preset('Space Sweep', {
+      category: 'Trip Hop Kit',
+      osc1: { wave: 'sawtooth', level: 0.45 }, osc2: { wave: 'square', octave: -1, detune: 12, level: 0.3 },
+      unison: 3, spread: 30, filter: { type: 'bandpass', cutoff: 700, q: 2, envAmt: 2.5 },
+      ampEnv: { a: 1.5, d: 2.5, s: 0.6, r: 3 }, filterEnv: { a: 3, d: 3, s: 0.2, r: 3 },
+      lfo: { wave: 'triangle', rate: 0.2, pitch: 0, filter: 1 }, noise: 0.35,
+      fx: { reverbMix: 0.65, reverbSize: 6, delayMix: 0.25, delayTime: 0.66, delayFb: 0.55 }, volume: 1.5,
+    }),
   ];
 
   // Fill any fields missing from an older saved patch.
@@ -88,7 +182,7 @@
     const d = defaultPatch();
     if (!p || typeof p !== 'object') return d;
     const out = Object.assign({}, d, p);
-    ['osc1', 'osc2', 'filter', 'ampEnv', 'filterEnv', 'fx'].forEach((k) => { out[k] = Object.assign({}, d[k], p[k] || {}); });
+    ['osc1', 'osc2', 'filter', 'ampEnv', 'filterEnv', 'lfo', 'fx'].forEach((k) => { out[k] = Object.assign({}, d[k], p[k] || {}); });
     return out;
   }
 
@@ -153,7 +247,28 @@
     scheduleEnv(amp.gain, patch.ampEnv, 0, aPeak, aSus, start, end);
     scheduleEnv(filter.frequency, patch.filterEnv, cutoff, fPeak, fSus, start, end);
 
-    const oscs = [];
+    const oscs = [];       // every source node, so they all stop together
+    const lfo = patch.lfo || {};
+    let lfoPitch = null;
+    if ((lfo.pitch || 0) > 0 || (lfo.filter || 0) > 0) {
+      const lo = ctx.createOscillator();
+      lo.type = lfo.wave || 'sine';
+      lo.frequency.value = clamp(lfo.rate || 1, 0.01, 30);
+      if (lfo.pitch > 0) { lfoPitch = ctx.createGain(); lfoPitch.gain.value = lfo.pitch; lo.connect(lfoPitch); }
+      if (lfo.filter > 0) { const lf = ctx.createGain(); lf.gain.value = lfo.filter * 1200; lo.connect(lf); lf.connect(filter.detune); }
+      lo.start(start);
+      oscs.push(lo);
+    }
+    if ((patch.noise || 0) > 0) {
+      const ns = ctx.createBufferSource();
+      ns.buffer = noiseBuffer(ctx);
+      ns.loop = true;
+      const ng = ctx.createGain();
+      ng.gain.value = clamp(patch.noise, 0, 1) * 0.6;
+      ns.connect(ng); ng.connect(filter);
+      ns.start(start, Math.random() * 1.5);
+      oscs.push(ns);
+    }
     const n = clamp(Math.round(patch.unison || 1), 1, 7);
     const baseFreq = midiToFreq(midi);
     [patch.osc1, patch.osc2].forEach((o) => {
@@ -165,6 +280,7 @@
         osc.frequency.value = baseFreq * Math.pow(2, (o.octave || 0) + (o.semi || 0) / 12);
         const spreadPos = n === 1 ? 0 : (u / (n - 1)) * 2 - 1;      // -1..1
         osc.detune.value = (o.detune || 0) + spreadPos * (patch.spread || 0);
+        if (lfoPitch) lfoPitch.connect(osc.detune);
         const g = ctx.createGain();
         g.gain.value = level;
         osc.connect(g);
@@ -216,6 +332,33 @@
     return voice;
   }
 
+  /* ---------------------------------------------------------- noise/drive */
+  const noiseCache = new WeakMap();
+  function noiseBuffer(ctx) {
+    let buf = noiseCache.get(ctx);
+    if (buf) return buf;
+    const len = Math.floor(ctx.sampleRate * 2);
+    buf = ctx.createBuffer(1, len, ctx.sampleRate);
+    const d = buf.getChannelData(0);
+    const rnd = seededRandom(98765);
+    for (let i = 0; i < len; i++) d[i] = rnd() * 2 - 1;
+    noiseCache.set(ctx, buf);
+    return buf;
+  }
+
+  // tanh saturation, gain-compensated so drive mostly adds colour, not volume.
+  function driveCurve(amount) {
+    const k = 1 + amount * 9;
+    const n = 2048;
+    const curve = new Float32Array(n);
+    const norm = Math.tanh(k);
+    for (let i = 0; i < n; i++) {
+      const x = (i / (n - 1)) * 2 - 1;
+      curve[i] = Math.tanh(k * x) / norm;
+    }
+    return curve;
+  }
+
   /* --------------------------------------------------------------- FX bus */
   // Deterministic noise so the live reverb and the exported one are identical.
   function seededRandom(seed) {
@@ -240,6 +383,7 @@
 
   function createBus(ctx, patch, output) {
     const input = ctx.createGain();
+    const shaper = ctx.createWaveShaper();
     const volume = ctx.createGain();
     const dry = ctx.createGain();
     const delay = ctx.createDelay(2.0);
@@ -248,13 +392,15 @@
     const convolver = ctx.createConvolver();
     const revWet = ctx.createGain();
 
-    input.connect(dry); dry.connect(volume);
-    input.connect(delay); delay.connect(delayFb); delayFb.connect(delay);
+    input.connect(shaper);
+    shaper.connect(dry); dry.connect(volume);
+    shaper.connect(delay); delay.connect(delayFb); delayFb.connect(delay);
     delay.connect(delayWet); delayWet.connect(volume);
-    input.connect(convolver); convolver.connect(revWet); revWet.connect(volume);
+    shaper.connect(convolver); convolver.connect(revWet); revWet.connect(volume);
     volume.connect(output);
 
     let impulseSize = null;
+    let driveAmt = null;
     const bus = {
       input,
       output: volume,
@@ -268,6 +414,13 @@
         if (impulseSize !== fx.reverbSize) {
           impulseSize = fx.reverbSize;
           convolver.buffer = makeImpulse(ctx, fx.reverbSize);
+        }
+        const drv = clamp(p.drive || 0, 0, 1);
+        if (drv !== driveAmt) {
+          driveAmt = drv;
+          shaper.curve = drv > 0.001 ? driveCurve(drv) : null;
+          shaper.oversample = drv > 0.001 ? '2x' : 'none';
+          input.gain.value = 1 + drv * 0.5;   // push a little harder into the curve
         }
         volume.gain.value = clamp(p.volume, 0, 1.5);
       },

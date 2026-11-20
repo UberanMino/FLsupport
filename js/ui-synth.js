@@ -130,13 +130,15 @@
   function buildPresetSelect() {
     presetSelect.innerHTML = '';
     const all = Synth.allPresets();
-    const factory = el('optgroup', { label: 'Factory' });
-    const user = el('optgroup', { label: 'My presets' });
+    const groups = new Map();   // category -> optgroup, in first-seen order
     all.forEach((p, i) => {
-      (p.user ? user : factory).appendChild(el('option', { value: String(i), text: p.name }));
+      const cat = p.user ? 'My presets' : (p.category || 'Basics');
+      if (!groups.has(cat)) groups.set(cat, el('optgroup', { label: cat }));
+      groups.get(cat).appendChild(el('option', { value: String(i), text: p.name }));
     });
-    presetSelect.appendChild(factory);
-    if (user.children.length) presetSelect.appendChild(user);
+    const mine = groups.get('My presets');
+    groups.forEach((g, cat) => { if (cat !== 'My presets') presetSelect.appendChild(g); });
+    if (mine) presetSelect.appendChild(mine);
     const idx = all.findIndex((p) => p.name === Synth.patch.name && !!p.user === !!Synth.patch.user);
     presetSelect.value = idx >= 0 ? String(idx) : '';
   }
@@ -356,6 +358,20 @@
       ]),
     ]);
 
+    const lfoCard = card('LFO · wobble', [
+      selectParam('lfo.wave', [['sine', 'Sine'], ['triangle', 'Triangle'], ['square', 'Square'], ['sawtooth', 'Saw']]),
+      param('Rate', 'lfo.rate', { log: true, min: 0.05, max: 20, fmt: (v) => (v < 1 ? v.toFixed(2) : v.toFixed(1)) + ' Hz' }),
+      el('div', { class: 'ctl-row' }, [
+        param('Pitch', 'lfo.pitch', { min: 0, max: 100, step: 1, fmt: (v) => Math.round(v) + ' ct' }),
+        param('Filter', 'lfo.filter', { min: 0, max: 3, step: 0.05, fmt: (v) => v.toFixed(2) + ' oct' }),
+      ]),
+    ]);
+
+    const colorCard = card('Noise · drive', [
+      param('Noise', 'noise', { min: 0, max: 1, step: 0.01, fmt: fmtPct }),
+      param('Drive', 'drive', { min: 0, max: 1, step: 0.01, fmt: fmtPct }),
+    ]);
+
     const delayCard = card('Delay', [
       el('div', { class: 'ctl-row' }, [
         param('Mix', 'fx.delayMix', { min: 0, max: 1, step: 0.01, fmt: fmtPct }),
@@ -370,7 +386,7 @@
     ]);
 
     const cards = el('div', { class: 'syn-cards' }, [
-      osc(1), osc(2), voiceCard, filterCard, env('Amp envelope', 'ampEnv'), env('Filter envelope', 'filterEnv'), delayCard, reverbCard,
+      osc(1), osc(2), voiceCard, filterCard, env('Amp envelope', 'ampEnv'), env('Filter envelope', 'filterEnv'), lfoCard, colorCard, delayCard, reverbCard,
     ]);
 
     // --- keyboard

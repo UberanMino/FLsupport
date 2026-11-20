@@ -78,8 +78,13 @@ Z X C V B N M , . /          ← bottom row: starts at C of the current octave
   You can also click/touch the on-screen piano.
 - **Sound**: 2 oscillators (sine/triangle/saw/square, octave, semitone, detune,
   level), unison (up to 7 voices with stereo spread), low/high/band-pass filter
-  with its own ADSR, amp ADSR, delay and reverb. 8 factory presets; save your
-  own presets (stored in this browser).
+  with its own ADSR, amp ADSR, an LFO for pitch/filter wobble (vibrato or tape
+  warble), noise, drive, delay and reverb. Save your own presets (stored in
+  this browser).
+- **Presets**: 8 basics plus a 12-preset **Trip Hop Kit** for atmospheric hip
+  hop / psychedelic trip hop: Dusty Keys, Tape Warble Pad, Haze Drone, Smoky
+  Sub, Mellow Bass, Psych Lead, Ghost Theremin, Breathy Flute, Lo-fi Strings,
+  Dream Bell, Echo Pluck and Space Sweep.
 - **Record a melody**: `● Rec` (optional one-bar count-in and click at the
   project BPM), play, stop. Note starts are quantized (Off … 1/32). **Overdub**
   adds to the take instead of replacing it; Undo note, transpose ±1 and Clear
