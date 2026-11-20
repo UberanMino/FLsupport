@@ -87,8 +87,11 @@
     folderName() { return lsGet(LS_FOLDER) || 'FL Studio Samples'; },
     setFolderName(name) { lsSet(LS_FOLDER, name); },
 
-    // Upload one WAV blob. Resolves { url } or rejects with { message }.
-    async saveWav(blob, filename, folderName) {
+    saveWav(blob, filename, folderName) { return Drive.saveFile(blob, filename, folderName, 'audio/wav'); },
+
+    // Upload one file. Resolves { url } or rejects with { message }.
+    async saveFile(blob, filename, folderName, mime) {
+      mime = mime || blob.type || 'application/octet-stream';
       const api = await mcp();
       if (!api) throw { message: 'Saving to Google Drive only works in the claude.ai version of this page.' };
       try {
@@ -96,7 +99,7 @@
         const fileArgs = (await Drive.maxBytes()) > INLINE_LIMIT;
         let content;
         if (fileArgs) {
-          content = { $file: { data: blob, name: filename, type: 'audio/wav' } };
+          content = { $file: { data: blob, name: filename, type: mime } };
         } else if (blob.size <= INLINE_LIMIT) {
           content = await blobToBase64(blob);
         } else {
@@ -106,7 +109,7 @@
           title: filename,
           parentId,
           base64Content: content,
-          contentMimeType: 'audio/wav',
+          contentMimeType: mime,
           disableConversionToGoogleType: true,
         });
         const p = (res && res.payload) || {};

@@ -426,3 +426,8 @@ input[type="range"]::-moz-range-thumb {
 .syn-field { display: flex; align-items: center; gap: 8px; }
 .syn-drive-status a { color: var(--accent); }
 .syn-drive-status:empty { display: none; }
+.syn-jam { display: flex; flex-direction: column; gap: 8px; padding: 10px 12px; border: 1px dashed var(--line); border-radius: 9px; }
+.syn-loops { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 10px; }
+.syn-loop-name { font-family: var(--font-display); font-weight: 600; font-size: 14px; }
+.syn-mini-roll { width: 100%; height: 56px; display: block; border-radius: 6px; background: var(--bg); border: 1px solid var(--line); }
+.toggle:disabled, .syn-select:disabled { opacity: 0.45; cursor: default; }

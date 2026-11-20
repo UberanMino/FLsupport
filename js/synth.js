@@ -31,6 +31,10 @@
     countIn: true,
     overdub: false,
     loop: false,
+    jamMode: false,         // free recording: no click, no count-in, no quantize
+    jam: null,              // last free jam: { notes, durationSec, recordedAt }
+    loops: [],              // loops found in the jam
+    _previewLoop: null,     // loop being previewed (plays instead of the take)
 
     take: { notes: [], lengthSec: 0, bpm: 90, beatsPerBar: 4 },
 
@@ -170,6 +174,13 @@
       this.stop();
       const ctx = MPC.engine.getContext();
       const t = this.tempo();
+      if (this.jamMode) {
+        this._recT0 = ctx.currentTime + 0.05;
+        this._recNew = [];
+        this.recording = true;
+        MPC.bus.emit('synth:state');
+        return;
+      }
       if (!this.overdub || !this.take.notes.length) {
         this.take = { notes: [], lengthSec: 0, bpm: t.bpm, beatsPerBar: t.beatsPerBar };
       } else if (this.take.bpm !== t.bpm) {
@@ -194,6 +205,28 @@
       this.recording = false;
       this._stopClicks();
       this._stopPlayback();
+
+      if (this.jamMode) {
+        const notes = this._recNew
+          .filter((n) => n.end != null)
+          .map((n) => ({ midi: n.midi, velocity: n.velocity, start: Math.max(0, n.start), end: Math.max(n.start + 0.02, n.end) }));
+        this._recNew = [];
+        if (notes.length < 4) {
+          MPC.toast('That jam is too short to find a loop in. Play a bit longer.');
+          MPC.bus.emit('synth:state');
+          return;
+        }
+        // Trim leading silence so times start near the first note.
+        const first = notes.reduce((m, n) => Math.min(m, n.start), Infinity);
+        const shift = Math.max(0, first - 0.25);
+        notes.forEach((n) => { n.start -= shift; n.end -= shift; });
+        this.jam = { notes, durationSec: notes.reduce((m, n) => Math.max(m, n.end), 0), recordedAt: new Date().toISOString(), patchName: this.patch.name };
+        this.loops = [];
+        MPC.bus.emit('synth:jam');
+        MPC.bus.emit('synth:state');
+        MPC.toast('Jam recorded: ' + notes.length + ' notes, ' + MPC.util.formatTime(this.jam.durationSec) + '.');
+        return;
+      }
 
       const t = { bpm: this.take.bpm || this.tempo().bpm, beatsPerBar: this.take.beatsPerBar || this.tempo().beatsPerBar };
       t.spb = 60 / t.bpm; t.bar = t.spb * t.beatsPerBar;
@@ -251,23 +284,27 @@
     },
 
     /* --------------------------------------------------------- playback */
+    _playing() { return this._previewLoop || this.take; },
+
     _scheduleTake(t0, loop) {
       const ctx = MPC.engine.getContext();
       const bus = this.bus();
+      const take = this._playing();
       this._playT0 = t0;
-      this.take.notes.forEach((n) => {
+      take.notes.forEach((n) => {
         this._playVoices.push(SE.startVoice(ctx, this.patch, n.midi, n.velocity, t0 + n.start, bus.input, t0 + n.end));
       });
       // drop finished voices so the list doesn't grow forever while looping
       this._playVoices = this._playVoices.filter((v) => v.endsAt > ctx.currentTime);
       if (loop) {
-        const next = t0 + this.take.lengthSec;
+        const next = t0 + take.lengthSec;
         const wait = Math.max(0, (next - ctx.currentTime - 0.15) * 1000);
         this._loopTimer = setTimeout(() => { if (this.playing) this._scheduleTake(next, true); }, wait);
       }
     },
 
     async play() {
+      this._previewLoop = null;
       if (!this.take.notes.length) { MPC.toast('Record something first.'); return; }
       await MPC.app.ensureAudio();
       if (this.recording) this.stopRecording();
@@ -282,12 +319,34 @@
       MPC.bus.emit('synth:state');
     },
 
+    // Play a found loop on repeat (until stop).
+    async previewLoop(loop) {
+      await MPC.app.ensureAudio();
+      if (this.recording) this.stopRecording();
+      this._stopPlayback();
+      const ctx = MPC.engine.getContext();
+      this._previewLoop = loop;
+      this.playing = true;
+      this._scheduleTake(ctx.currentTime + 0.06, true);
+      MPC.bus.emit('synth:state');
+    },
+
+    // Make a found loop the current take (to edit, play, export as usual).
+    useLoopAsTake(loop) {
+      this.stop();
+      this.take = { notes: loop.notes.map((n) => Object.assign({}, n)), lengthSec: loop.lengthSec, bpm: loop.bpm, beatsPerBar: loop.beatsPerBar };
+      MPC.app.markDirty();
+      MPC.bus.emit('synth:take');
+      MPC.bus.emit('synth:state');
+    },
+
     _stopPlayback() {
       if (this._loopTimer) clearTimeout(this._loopTimer);
       this._loopTimer = null;
       this._playVoices.forEach((v) => v.kill());
       this._playVoices = [];
       this.playing = false;
+      this._previewLoop = null;
     },
 
     stop() {
@@ -303,7 +362,8 @@
       const ctx = MPC.engine.getContext();
       const t0 = this.recording ? this._recT0 : this._playT0;
       let p = ctx.currentTime - t0;
-      if (this.playing && this.loop && this.take.lengthSec > 0 && p > 0) p = p % this.take.lengthSec;
+      const len = this._playing().lengthSec;
+      if (this.playing && (this.loop || this._previewLoop) && len > 0 && p > 0) p = p % len;
       return p;
     },
 
@@ -325,6 +385,39 @@
     async renderOneShot(midi, holdSec, opts) {
       opts = opts || {};
       return SE.render(this.patch, [{ midi, velocity: opts.velocity || 0.9, start: 0, end: holdSec }], { normalize: !!opts.normalize });
+    },
+
+    // Seamless loop audio: render the loop three times in a row and keep the
+    // middle pass, so note releases and delay/reverb tails from the end
+    // carry over into the start exactly as they would when looping.
+    async renderLoop(loop, opts) {
+      opts = opts || {};
+      const L = loop.lengthSec;
+      const notes = [];
+      for (let k = 0; k < 3; k++) loop.notes.forEach((n) => notes.push({ midi: n.midi, velocity: n.velocity, start: n.start + k * L, end: n.end + k * L }));
+      const full = await SE.render(this.patch, notes, { minLength: 3 * L, normalize: false });
+      const sr = full.sampleRate;
+      const a = Math.round(L * sr), len = Math.round(L * sr);
+      const out = new AudioBuffer({ numberOfChannels: full.numberOfChannels, length: len, sampleRate: sr });
+      for (let c = 0; c < full.numberOfChannels; c++) {
+        const src = full.getChannelData(c);
+        const seg = new Float32Array(len);
+        seg.set(src.subarray(a, Math.min(src.length, a + len)));
+        out.copyToChannel(seg, c);
+      }
+      if (opts.normalize) {
+        const peak = SE.peakOf(out);
+        if (peak > 0) for (let c = 0; c < out.numberOfChannels; c++) { const d = out.getChannelData(c); for (let i = 0; i < d.length; i++) d[i] *= 0.966 / peak; }
+      }
+      return out;
+    },
+
+    loopBaseName(loop) {
+      const d = new Date(this.jam && this.jam.recordedAt ? this.jam.recordedAt : Date.now());
+      const stamp = d.getFullYear() + String(d.getMonth() + 1).padStart(2, '0') + String(d.getDate()).padStart(2, '0') + '-' +
+        String(d.getHours()).padStart(2, '0') + String(d.getMinutes()).padStart(2, '0');
+      const name = MPC.util.sanitizeFilename(loop.name || 'loop').slice(0, 24);
+      return this._baseName() + '_' + stamp + '_' + name + '_' + Math.round(loop.bpm) + 'bpm_' + loop.bars + 'bar';
     },
 
     takeFilename() {

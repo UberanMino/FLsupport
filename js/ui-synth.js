@@ -409,6 +409,10 @@
     const loopT = toggleBtn('↻ Loop', 'Loop playback', () => Synth.loop, (v) => { Synth.loop = v; });
     const dubT = toggleBtn('Overdub', 'Add to the existing take instead of replacing it', () => Synth.overdub, (v) => { Synth.overdub = v; });
     const clickT = toggleBtn('🎵 Click', 'Metronome while recording (uses the project BPM)', () => Synth.metronome, (v) => { Synth.metronome = v; });
+    const jamT = toggleBtn('🌀 Jam', 'Free jam: record without click, count-in or tempo, then find the loops in it', () => Synth.jamMode, (v) => {
+      Synth.jamMode = v;
+      [dubT.el, clickT.el, countT.el, quant].forEach((n) => { n.disabled = v; });
+    });
     const countT = toggleBtn('Count-in', 'One bar count-in before recording', () => Synth.countIn, (v) => { Synth.countIn = v; });
     const quant = el('select', { class: 'syn-select', title: 'Quantize note starts when recording stops' },
       ['off', '1/4', '1/8', '1/8T', '1/16', '1/16T', '1/32'].map((q) => el('option', { value: q, text: q === 'off' ? 'Off' : q })));
@@ -428,7 +432,7 @@
 
     const recorder = el('div', { class: 'syn-recorder' }, [
       el('div', { class: 'syn-rec-bar' }, [
-        el('div', { class: 'syn-group' }, [recBtn, playBtn, stopBtn, loopT.el, dubT.el]),
+        el('div', { class: 'syn-group' }, [recBtn, playBtn, stopBtn, loopT.el, dubT.el, jamT.el]),
         el('div', { class: 'syn-group' }, [clickT.el, countT.el, el('span', { class: 'pl-label', text: 'Quantize' }), quant]),
         el('div', { class: 'syn-group' }, [el('span', { class: 'pl-label', text: 'Take' }), el('span', { class: 'syn-take-info', id: 'syn-take-info' }), undoBtn, el('span', { class: 'pl-label', text: 'Transpose' }), trDown, trUp, clearBtn]),
       ]),
@@ -529,13 +533,151 @@
       () => Synth.oneShotFilename(parseInt(noteSel.value, 10))));
     const driveCard = card('Google Drive', [
       el('label', { class: 'syn-field', for: 'syn-drive-folder' }, [el('span', { class: 'pl-label', text: 'Folder' }), driveFolder]),
-      el('p', { class: 'syn-note', text: '“☁ Save to Drive” uploads the WAV into this folder in My Drive. The folder is created if it doesn’t exist.' }),
+      el('p', { class: 'syn-note', text: '“☁ Save to Drive” uploads into this folder in My Drive (loops as WAV + MIDI). The folder is created if it doesn’t exist.' }),
       driveStatus,
     ]);
     driveCard.hidden = true;
     MPC.drive.available().then((ok) => {
       if (!ok) return;
       driveCard.hidden = false; takeToDrive.hidden = false; shotToDrive.hidden = false;
+    });
+
+    // --- jam → loops
+    const jamInfo = el('span', { class: 'syn-take-info' });
+    const findBtn = el('button', { class: 'primary', text: '✨ Find loops' });
+    const scriptBtn = el('button', { class: 'mini', text: 'Quick find (no Claude)', title: 'Use the built-in loop finder instead of Claude', hidden: 'hidden' });
+    const jamStatus = el('p', { class: 'syn-note', 'aria-live': 'polite' });
+    const loopList = el('div', { class: 'syn-loops' });
+    const jamPanel = el('div', { class: 'syn-jam' }, [
+      el('div', { class: 'syn-group' }, [el('span', { class: 'pl-label', text: 'Last jam' }), jamInfo, findBtn, scriptBtn]),
+      jamStatus,
+      loopList,
+    ]);
+    jamPanel.hidden = true;
+    MPC.jamAnalyzer.claudeAvailable().then((ok) => {
+      if (ok) { findBtn.textContent = '✨ Find loops with Claude'; scriptBtn.hidden = false; }
+    });
+
+    function drawMiniRoll(canvas, loop) {
+      const dpr = window.devicePixelRatio || 1;
+      const w = canvas.clientWidth || 260, h = canvas.clientHeight || 56;
+      canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr);
+      const g = canvas.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const spb = 60 / loop.bpm;
+      const css = getComputedStyle(document.documentElement);
+      for (let b = 0; b <= loop.bars * loop.beatsPerBar; b++) {
+        g.fillStyle = b % loop.beatsPerBar === 0 ? 'rgba(255,255,255,0.18)' : 'rgba(255,255,255,0.06)';
+        g.fillRect(Math.round((b * spb / loop.lengthSec) * (w - 1)), 0, 1, h);
+      }
+      let lo = 127, hi = 0;
+      loop.notes.forEach((n) => { lo = Math.min(lo, n.midi); hi = Math.max(hi, n.midi); });
+      const rows = hi - lo + 3, rh = h / rows;
+      g.fillStyle = css.getPropertyValue('--accent').trim() || '#54a0ff';
+      loop.notes.forEach((n) => {
+        g.fillRect((n.start / loop.lengthSec) * w, (hi + 1 - n.midi) * rh, Math.max(2, ((n.end - n.start) / loop.lengthSec) * w - 1), Math.max(2, rh - 1));
+      });
+    }
+
+    async function loopFiles(loop) {
+      const base = Synth.loopBaseName(loop);
+      const buf = await Synth.renderLoop(loop, { normalize: normCb.checked });
+      const wav = MPC.encoders.encodeWav(buf, parseInt(bits.value, 10));
+      const mid = MPC.midi.toBlob(loop, { name: loop.name });
+      return { base, buf, wav, mid };
+    }
+
+    function renderLoops(result) {
+      loopList.innerHTML = '';
+      const loops = result.loops;
+      if (!loops.length) {
+        jamStatus.textContent = (result.note ? result.note + ' ' : '') + 'No loop stood out in this jam. Try repeating an idea two or three times.';
+        return;
+      }
+      jamStatus.textContent = (result.note ? result.note + ' ' : '') +
+        (result.source === 'claude' ? 'Claude picked these loops and tightened the timing.' : 'The built-in loop finder picked these.');
+      loops.forEach((loop) => {
+        const roll = el('canvas', { class: 'syn-mini-roll' });
+        const prev = el('button', { class: 'mini', text: '▶ Preview' });
+        const use = el('button', { class: 'mini', text: 'Use as take', title: 'Load into the recorder to edit, play or export' });
+        const dl = el('button', { class: 'mini', text: '⬇ WAV + MIDI' });
+        const drv = el('button', { class: 'mini syn-drive', text: '☁ Save to Drive', hidden: 'hidden' });
+        const status = el('p', { class: 'syn-note' });
+        prev.addEventListener('click', () => {
+          prev.blur();
+          if (Synth._previewLoop === loop) { Synth.stop(); return; }
+          Synth.previewLoop(loop);
+        });
+        const syncPrev = () => { const on = Synth._previewLoop === loop && Synth.playing; prev.textContent = on ? '■ Stop' : '▶ Preview'; prev.classList.toggle('active', on); };
+        MPC.bus.on('synth:state', syncPrev);
+        use.addEventListener('click', () => { Synth.useLoopAsTake(loop); MPC.toast('Loaded “' + loop.name + '” as the take (' + loop.bpm + ' BPM).'); });
+        dl.addEventListener('click', () => busy(dl, async () => {
+          const f = await loopFiles(loop);
+          const zipBlob = MPC.encoders.zip([
+            { name: f.base + '.wav', bytes: new Uint8Array(await f.wav.arrayBuffer()) },
+            { name: f.base + '.mid', bytes: new Uint8Array(await f.mid.arrayBuffer()) },
+          ]);
+          await MPC.host.saveFile(f.base + '.zip', zipBlob);
+        }));
+        drv.addEventListener('click', () => busy(drv, async () => {
+          const folder = driveFolder.value.trim() || MPC.drive.folderName();
+          status.textContent = 'Uploading to “' + folder + '”…';
+          try {
+            const f = await loopFiles(loop);
+            let wav = f.wav, note = '';
+            if (parseInt(bits.value, 10) === 24 && wav.size > await MPC.drive.maxBytes()) { wav = MPC.encoders.encodeWav(f.buf, 16); note = ' (WAV as 16-bit to fit the upload limit)'; }
+            const a = await MPC.drive.saveFile(wav, f.base + '.wav', folder, 'audio/wav');
+            await MPC.drive.saveFile(f.mid, f.base + '.mid', folder, 'audio/midi');
+            status.textContent = 'Saved WAV + MIDI to “' + folder + '”' + note + '. ';
+            if (a.url) status.appendChild(el('a', { href: a.url, target: '_blank', rel: 'noopener', text: 'Open in Drive' }));
+          } catch (err) { status.textContent = err.message || String(err); throw err; }
+        }));
+        MPC.drive.available().then((ok) => { drv.hidden = !ok; });
+        const cardEl = el('div', { class: 'syn-card syn-loop' }, [
+          el('div', { class: 'syn-card-head' }, [
+            el('div', { class: 'syn-loop-name', text: loop.name }),
+            el('span', { class: 'syn-take-info', text: loop.bars + ' bar' + (loop.bars === 1 ? '' : 's') + ' · ' + loop.bpm + ' BPM · ' + loop.beatsPerBar + '/4 · at ' + MPC.util.formatTime(loop.startInJam) }),
+          ]),
+          roll,
+          loop.reason ? el('p', { class: 'syn-note', text: loop.reason }) : null,
+          el('div', { class: 'syn-group' }, [prev, use, dl, drv]),
+          status,
+        ].filter(Boolean));
+        loopList.appendChild(cardEl);
+        requestAnimationFrame(() => drawMiniRoll(roll, loop));
+      });
+    }
+
+    let analyzing = null;
+    async function analyze(useClaude) {
+      if (!Synth.jam) return;
+      if (analyzing) { analyzing.abort(); return; }
+      analyzing = new AbortController();
+      const btn = useClaude ? findBtn : scriptBtn;
+      const label = btn.textContent;
+      btn.textContent = useClaude ? 'Stop' : 'Finding…';
+      jamStatus.textContent = useClaude ? 'Claude is listening through your jam… (this can take up to a minute)' : 'Finding loops…';
+      loopList.innerHTML = '';
+      try {
+        const res = await MPC.jamAnalyzer.analyze(Synth.jam, { useClaude, signal: analyzing.signal, onProgress: (t) => { jamStatus.textContent = t; } });
+        Synth.loops = res.loops;
+        renderLoops(res);
+      } catch (err) {
+        jamStatus.textContent = err && err.code === 'cancelled' ? 'Stopped.' : 'Finding loops failed: ' + ((err && err.message) || err);
+      }
+      btn.textContent = label;
+      analyzing = null;
+    }
+    findBtn.addEventListener('click', () => { findBtn.blur(); analyze(true); });
+    scriptBtn.addEventListener('click', () => { scriptBtn.blur(); analyze(false); });
+
+    MPC.bus.on('synth:jam', () => {
+      const j = Synth.jam;
+      jamPanel.hidden = !j;
+      if (!j) return;
+      jamInfo.textContent = j.notes.length + ' notes · ' + MPC.util.formatTime(j.durationSec);
+      jamStatus.textContent = 'Press “Find loops” to pull loops out of this jam.';
+      loopList.innerHTML = '';
     });
 
     const exportBox = el('div', { class: 'syn-export' }, [
@@ -559,6 +701,7 @@
     host.appendChild(head);
     host.appendChild(el('div', { class: 'syn-keys' }, [piano, kbHint]));
     host.appendChild(recorder);
+    host.appendChild(jamPanel);
     host.appendChild(cards);
     host.appendChild(exportBox);
 

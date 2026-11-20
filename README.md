@@ -89,6 +89,17 @@ Z X C V B N M , . /          ← bottom row: starts at C of the current octave
   project BPM), play, stop. Note starts are quantized (Off … 1/32). **Overdub**
   adds to the take instead of replacing it; Undo note, transpose ±1 and Clear
   edit it. The take is shown in a mini piano roll and saved with the project.
+- **🌀 Jam → loops**: switch on **Jam** and press Rec to play freely, with no
+  click, count-in or tempo, for as long as you like. When you stop, **Find
+  loops** picks up to 3 loopable passages. In the claude.ai version the notes
+  go to Claude, which works out each loop's own tempo (so tempo changes during
+  the jam are fine), fixes sloppy timing, drops stray notes and makes the end
+  lead back into the start. Elsewhere (or with **Quick find**) a built-in loop
+  finder does it instead: it estimates the tempo and looks for phrases you
+  repeated. Each loop can be previewed, loaded as the take, downloaded as a
+  ZIP with a **seamless WAV + MIDI file**, or saved to Drive. The WAV is
+  rendered as the middle of three passes, so release and delay/reverb tails
+  from the end carry over into the start and it loops without a click.
 - **Export**: render the melody (starting at bar 1 for grid alignment, or
   trimmed to the first note) or a single **one-shot** note to a 44.1 kHz WAV
   (24- or 16-bit, optional normalize to −0.3 dBFS). Rendering happens offline,
@@ -191,6 +202,9 @@ Vanilla JS modules under `js/` (no dependencies), styled by `styles/main.css`:
 | `render.js` | offline rendering → stems / sections / master + clip waveforms |
 | `synth-engine.js` | synth voices, FX bus, presets, offline synth rendering |
 | `synth.js` | synth playing, take recording/playback, export, persistence |
+| `loop-finder.js` | rule-based tempo estimate + loop picking for free jams |
+| `jam-analyzer.js` | sends a jam to Claude (Artifact `sample` capability) to pick loops; falls back to loop-finder |
+| `midi.js` | Standard MIDI File writer for loops |
 | `drive.js` | save WAVs to a Google Drive folder (Artifact build, via the `mcp` capability) |
 | `host-bridge.js` | file saving (browser download or Artifact `downloads`) |
 | `app.js` | central state + actions |
