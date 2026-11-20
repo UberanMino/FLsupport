@@ -81,7 +81,7 @@
       const eb = (n.end - tempo.offset) / tempo.beat;
       const qs = Math.round(sb / q) * q;
       const len = Math.max(q, Math.round((eb - sb) / q) * q);
-      return { midi: n.midi, velocity: n.velocity, beat: qs, len, err: Math.abs(sb - qs) / q };
+      return { midi: n.midi, velocity: n.velocity, beat: qs, len, rawBeat: sb, rawLen: eb - sb, err: Math.abs(sb - qs) / q };
     });
   }
 
@@ -184,6 +184,7 @@
         repeat: c.repeat,
         score: c.score,
         notes: loopNotes,
+        grid: c.notes.map((n) => ({ midi: n.midi, velocity: n.velocity, beat: n.beat - c.startBeat, len: n.len, rawBeat: n.rawBeat - c.startBeat, rawLen: n.rawLen })),
       };
     });
     return { tempo, loops };

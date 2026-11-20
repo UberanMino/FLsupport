@@ -93,8 +93,11 @@ Z X C V B N M , . /          ← bottom row: starts at C of the current octave
   click, count-in or tempo, for as long as you like. When you stop, **Find
   loops** picks up to 3 loopable passages. In the claude.ai version the notes
   go to Claude, which works out each loop's own tempo (so tempo changes during
-  the jam are fine), fixes sloppy timing, drops stray notes and makes the end
-  lead back into the start. Elsewhere (or with **Quick find**) a built-in loop
+  the jam are fine), works out which beat each note was aiming for and drops
+  stray notes. Loops stay **human**: your own timing and note lengths are kept,
+  and the **Tightness** slider (also used by the normal recorder's quantize)
+  only nudges notes that are clearly off the beat — 0 = exactly as played,
+  100% = fully on the grid. Elsewhere (or with **Quick find**) a built-in loop
   finder does it instead: it estimates the tempo and looks for phrases you
   repeated. Each loop can be previewed, loaded as the take, downloaded as a
   ZIP with a **seamless WAV + MIDI file**, or saved to Drive. The WAV is

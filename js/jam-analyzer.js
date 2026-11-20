@@ -26,9 +26,14 @@
     return samplePromise;
   }
 
+  function sortedNotes(jam) {
+    return jam.notes.slice().sort((a, b) => a.start - b.start).slice(0, MAX_NOTES);
+  }
+
   function buildPrompt(jam, hintBpm) {
-    const notes = jam.notes.slice().sort((a, b) => a.start - b.start).slice(0, MAX_NOTES);
-    const lines = notes.map((n) => [
+    const notes = sortedNotes(jam);
+    const lines = notes.map((n, i) => [
+      i,
       n.start.toFixed(3), (n.end - n.start).toFixed(3), n.midi,
       MPC.synthEngine.noteName(n.midi), Math.round(n.velocity * 127),
     ].join(' '));
@@ -36,7 +41,7 @@
       'A music producer improvised on a synth (played on a computer keyboard) with no metronome, to find ideas for loops',
       'for atmospheric hip hop / trip hop beats. They may speed up, slow down or switch tempo between ideas.',
       '',
-      'Every note they played, one per line: start_seconds duration_seconds midi_number note_name velocity_1_127',
+      'Every note they played, one per line: index start_seconds duration_seconds midi_number note_name velocity_1_127',
       lines.join('\n'),
       '',
       hintBpm ? 'A rough automatic tempo estimate for the whole jam is ' + hintBpm + ' BPM. It can be wrong, especially where the tempo changes.' : '',
@@ -46,14 +51,15 @@
       '- Work out ITS OWN tempo and meter from the notes in that passage only (BPM usually 60-160), and pick a length of 1, 2, 4 or 8 bars.',
       '  If the player repeated an idea, the loop is one repetition of it.',
       '- startTime: the second in the jam where bar 1, beat 1 of the loop falls.',
-      '- Rewrite it as a clean loop: positions in beats from 0 (16th notes and 8th-note triplets allowed), lengths in beats,',
-      '  keeping the pitches and the player\'s rhythm. Fix sloppy timing, drop obvious mistakes and stray notes, and make the',
-      '  end lead back into the start: no note may run past the loop end (shorten the last notes if needed).',
-      '  Do not invent new material beyond such small fixes.',
+      '- List the loop\'s notes. For each note give "i", the index of the played note it comes from, and "beat", the grid',
+      '  position (in beats from 0; 16ths and 8th-note triplets allowed) the player was aiming for. The player wants the loop',
+      '  to stay HUMAN: their own timing and note lengths are kept and only notes that are clearly off get nudged toward',
+      '  "beat", so give the position they meant, never move notes to a different rhythm. Leave out obvious mistakes and',
+      '  stray notes. Notes should fit inside the loop so it runs back into the start. Do not add notes.',
       '',
       'Reply with only JSON in this shape, best loop first:',
       '{"loops":[{"name":"2-3 word evocative name","reason":"one sentence: why this works as a loop and what you fixed",',
-      '"bpm":88,"beatsPerBar":4,"bars":2,"startTime":12.34,"notes":[{"midi":57,"beat":0,"len":1,"vel":100}]}]}',
+      '"bpm":88,"beatsPerBar":4,"bars":2,"startTime":12.34,"notes":[{"i":41,"midi":57,"beat":0,"len":1,"vel":100}]}]}',
       'If nothing in the jam works as a loop, reply {"loops":[]}.',
     ].join('\n');
   }
@@ -64,7 +70,7 @@
   }
 
   // Validate Claude's JSON and convert beats to seconds.
-  function fromClaude(data) {
+  function fromClaude(data, sorted) {
     const list = data && Array.isArray(data.loops) ? data.loops : [];
     return list.slice(0, 3).map((l, i) => {
       const bpm = num(l.bpm, 30, 300, 90);
@@ -72,46 +78,94 @@
       const bars = Math.round(num(l.bars, 1, 16, 2));
       const beats = bars * bpb;
       const spb = 60 / bpm;
-      const notes = (Array.isArray(l.notes) ? l.notes : [])
+      const startTime = num(l.startTime, 0, 1e6, 0);
+      const grid = (Array.isArray(l.notes) ? l.notes : [])
         .map((n) => {
           const beat = num(n.beat, -1, beats, NaN);
           const len = num(n.len, 0.03, beats, 0.5);
-          const midi = Math.round(num(n.midi, 0, 127, NaN));
+          const src = Number.isInteger(n.i) && sorted[n.i] ? sorted[n.i] : null;
+          const midi = Math.round(num(n.midi != null ? n.midi : src && src.midi, 0, 127, NaN));
           if (!Number.isFinite(beat) || !Number.isFinite(midi) || beat < 0 || beat >= beats) return null;
-          const end = Math.min(beats, beat + len);
-          return { midi, velocity: num(n.vel, 1, 127, 100) / 127, start: beat * spb, end: Math.max(beat * spb + 0.02, end * spb) };
+          // The player's own timing, in beats on this loop's grid.
+          const rawBeat = src ? (src.start - startTime) / spb : beat;
+          const rawLen = src ? (src.end - src.start) / spb : len;
+          // A source note far from the target means a wrong index: trust the target.
+          const ok = Math.abs(rawBeat - beat) <= 1;
+          return {
+            midi,
+            velocity: src ? src.velocity : num(n.vel, 1, 127, 100) / 127,
+            beat, len,
+            rawBeat: ok ? rawBeat : beat,
+            rawLen: ok ? rawLen : len,
+          };
         })
-        .filter(Boolean)
-        .sort((a, b) => a.start - b.start);
+        .filter(Boolean);
       return {
         name: String(l.name || 'Loop ' + String.fromCharCode(65 + i)).slice(0, 40),
         reason: String(l.reason || '').slice(0, 300),
         bpm, beatsPerBar: bpb, bars,
         lengthSec: beats * spb,
-        startInJam: num(l.startTime, 0, 1e6, 0),
+        startInJam: startTime,
         source: 'claude',
-        notes,
+        grid,
+        notes: [],
       };
-    }).filter((l) => l.notes.length > 0);
+    }).filter((l) => l.grid.length > 0);
   }
 
   function byScript(jam) {
     const res = MPC.loopFinder.findLoops(jam.notes, { beatsPerBar: 4 });
     return res.loops.map((l, i) => Object.assign({}, l, {
+      grid: l.grid,
       name: 'Loop ' + String.fromCharCode(65 + i),
       reason: (l.repeat >= 0.6 ? 'You played this phrase twice in a row. ' : '') + 'Found by the built-in loop finder at ' + l.bpm + ' BPM.',
       source: 'script',
     }));
   }
 
+  /*
+   * Humanized quantize. `tightness` 0..1:
+   *   0   = exactly as played,
+   *   1   = fully on the grid.
+   * In between, a note within a tolerance window of its grid spot is left
+   * alone; one further off is pulled back toward it. Note lengths stay as
+   * played (only cut at the loop end), which is most of what sounds human.
+   */
+  function feelBeat(raw, target, tightness) {
+    const t = Math.max(0, Math.min(1, tightness));
+    const d = target - raw;
+    const tol = 0.15 * (1 - t);            // beats
+    const ad = Math.abs(d);
+    if (ad <= tol) return raw;
+    return raw + Math.sign(d) * (ad - tol) * Math.min(1, 2 * t);
+  }
+
+  function applyFeel(loop, tightness) {
+    const spb = 60 / loop.bpm;
+    const beats = loop.bars * loop.beatsPerBar;
+    loop.notes = (loop.grid || []).map((n) => {
+      let b = feelBeat(n.rawBeat, n.beat, tightness);
+      b = Math.max(0, Math.min(beats - 0.05, b));
+      const lenBeats = Math.max(0.05, n.rawLen != null ? n.rawLen : n.len);
+      const end = Math.min(beats, b + lenBeats);
+      return { midi: n.midi, velocity: n.velocity, start: b * spb, end: Math.max(b * spb + 0.02, end * spb) };
+    }).sort((a, b) => a.start - b.start);
+    return loop;
+  }
+
   const JamAnalyzer = {
+    feelBeat,
+    applyFeel,
+
     async claudeAvailable() { return !!(await sampleFn()); },
 
     // opts: { useClaude (default true), signal, onProgress(text) }
     async analyze(jam, opts) {
       opts = opts || {};
       const sample = opts.useClaude === false ? null : await sampleFn();
-      if (!sample) return { loops: byScript(jam), source: 'script' };
+      const feel = opts.tightness != null ? opts.tightness : 0.35;
+      const done = (r) => { r.loops.forEach((l) => applyFeel(l, feel)); return r; };
+      if (!sample) return done({ loops: byScript(jam), source: 'script' });
       const hint = MPC.loopFinder.estimateTempo(jam.notes);
       const prompt = buildPrompt(jam, hint ? hint.bpm : null);
       try {
@@ -120,7 +174,7 @@
           onText: opts.onProgress ? () => opts.onProgress('Claude is writing the loops…') : undefined,
           cache: false,
         });
-        return { loops: fromClaude(data), source: 'claude' };
+        return done({ loops: fromClaude(data, sortedNotes(jam)), source: 'claude' });
       } catch (err) {
         const code = err && err.code;
         if (code === 'cancelled') throw err;
@@ -129,7 +183,7 @@
           : code === 'rate_limited' ? 'Claude is busy right now'
             : code === 'invalid_json' ? 'Claude’s answer couldn’t be read'
               : 'Claude couldn’t be reached';
-        return { loops: byScript(jam), source: 'script', note: why + ', so the built-in loop finder was used.' };
+        return done({ loops: byScript(jam), source: 'script', note: why + ', so the built-in loop finder was used.' });
       }
     },
   };

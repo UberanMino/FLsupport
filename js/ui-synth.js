@@ -430,6 +430,13 @@
     quant.value = Synth.quantize;
     quant.addEventListener('change', () => { Synth.quantize = quant.value; quant.blur(); });
 
+    const tightVal = el('span', { class: 'sl-val' });
+    const tight = el('input', { id: 'syn-tightness', type: 'range', min: 0, max: 1, step: 0.05, value: Synth.tightness, title: 'How much timing gets corrected. Low keeps your feel; notes only move when they are clearly off. Note lengths always stay as played.' });
+    const showTight = () => { const v = Synth.tightness; tightVal.textContent = v === 0 ? 'as played' : v >= 1 ? 'grid' : Math.round(v * 100) + '%'; };
+    tight.addEventListener('input', () => { Synth.setTightness(parseFloat(tight.value)); showTight(); });
+    tight.addEventListener('change', () => tight.blur());
+    showTight();
+
     const undoBtn = el('button', { class: 'mini', text: 'Undo note', title: 'Remove the last note of the take' });
     undoBtn.addEventListener('click', () => Synth.undoLastNote());
     const trDown = el('button', { class: 'mini', text: '−1', title: 'Transpose take down a semitone' });
@@ -444,7 +451,8 @@
     const recorder = el('div', { class: 'syn-recorder' }, [
       el('div', { class: 'syn-rec-bar' }, [
         el('div', { class: 'syn-group' }, [recBtn, playBtn, stopBtn, loopT.el, dubT.el, jamT.el]),
-        el('div', { class: 'syn-group' }, [clickT.el, countT.el, el('span', { class: 'pl-label', text: 'Quantize' }), quant]),
+        el('div', { class: 'syn-group' }, [clickT.el, countT.el, el('span', { class: 'pl-label', text: 'Quantize' }), quant,
+          el('span', { class: 'pl-label', text: 'Tightness' }), tight, tightVal]),
         el('div', { class: 'syn-group' }, [el('span', { class: 'pl-label', text: 'Take' }), el('span', { class: 'syn-take-info', id: 'syn-take-info' }), undoBtn, el('span', { class: 'pl-label', text: 'Transpose' }), trDown, trUp, clearBtn]),
       ]),
       roll,
@@ -606,7 +614,8 @@
         return;
       }
       jamStatus.textContent = (result.note ? result.note + ' ' : '') +
-        (result.source === 'claude' ? 'Claude picked these loops and tightened the timing.' : 'The built-in loop finder picked these.');
+        (result.source === 'claude' ? 'Claude picked these loops.' : 'The built-in loop finder picked these.') +
+        ' Your timing and note lengths are kept; the Tightness slider sets how much off-beat notes get nudged.';
       loops.forEach((loop) => {
         const roll = el('canvas', { class: 'syn-mini-roll' });
         const prev = el('button', { class: 'mini', text: '▶ Preview' });
@@ -656,6 +665,7 @@
         ].filter(Boolean));
         loopList.appendChild(cardEl);
         requestAnimationFrame(() => drawMiniRoll(roll, loop));
+        MPC.bus.on('synth:feel', () => { if (roll.isConnected) drawMiniRoll(roll, loop); });
       });
     }
 
@@ -670,7 +680,7 @@
       jamStatus.textContent = useClaude ? 'Claude is listening through your jam… (this can take up to a minute)' : 'Finding loops…';
       loopList.innerHTML = '';
       try {
-        const res = await MPC.jamAnalyzer.analyze(Synth.jam, { useClaude, signal: analyzing.signal, onProgress: (t) => { jamStatus.textContent = t; } });
+        const res = await MPC.jamAnalyzer.analyze(Synth.jam, { tightness: Synth.tightness, useClaude, signal: analyzing.signal, onProgress: (t) => { jamStatus.textContent = t; } });
         Synth.loops = res.loops;
         renderLoops(res);
       } catch (err) {

@@ -27,6 +27,7 @@
     octave: 4,              // lower keyboard row starts at C<octave>
     velocity: 0.85,
     quantize: '1/16',
+    tightness: 0.35,        // 0 = as played, 1 = hard quantize (recorder + jam loops)
     metronome: true,
     countIn: true,
     overdub: false,
@@ -239,9 +240,12 @@
           let start = Math.max(0, n.start);
           let end = Math.max(start + 0.02, n.end);
           if (grid > 0) {
-            const qs = Math.round(start / grid) * grid;
-            end = qs + Math.max(grid / 2, end - start);
-            start = qs;
+            // Humanized: only notes clearly off the grid get pulled toward it,
+            // and the played length is kept.
+            const target = Math.round(start / grid) * grid;
+            const len = end - start;
+            start = Math.max(0, MPC.jamAnalyzer.feelBeat(start / t.spb, target / t.spb, this.tightness) * t.spb);
+            end = start + len;
           }
           return { midi: n.midi, velocity: n.velocity, start, end };
         });
@@ -332,6 +336,12 @@
     },
 
     // Make a found loop the current take (to edit, play, export as usual).
+    setTightness(v) {
+      this.tightness = clamp(v, 0, 1);
+      this.loops.forEach((l) => MPC.jamAnalyzer.applyFeel(l, this.tightness));
+      MPC.bus.emit('synth:feel');
+    },
+
     useLoopAsTake(loop) {
       this.stop();
       this.take = { notes: loop.notes.map((n) => Object.assign({}, n)), lengthSec: loop.lengthSec, bpm: loop.bpm, beatsPerBar: loop.beatsPerBar };
